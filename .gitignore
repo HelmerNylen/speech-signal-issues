@@ -1,6 +1,5 @@
 # -- Project-specific --
 .vscode/
-degradation/adt/
 
 # -- GitHub Python default --
 # Byte-compiled / optimized / DLL files
