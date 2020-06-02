@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 import os
 import sys
-import subprocess
 import argparse
 import math
 import csv
 from time import time
 
-def _noise_files(noise_folder, keep=[".wav"]):
+def _noise_files(noise_folder, keep=(".wav",)):
 	walk = os.walk(noise_folder, followlinks=True)
 	# Skip .WAV (uppercase) files as these are unprocessed timit sphere files (i.e. don't use os.path.splitext(fn)[-1].lower())
 	walk = ((dp, dn, [fn for fn in filenames if os.path.splitext(fn)[-1] in keep])
@@ -17,7 +16,7 @@ def _noise_files(noise_folder, keep=[".wav"]):
 			if dirpath != noise_folder and len(filenames) > 0)
 	return walk
 
-def _speech_files(speech_folder, keep=[".wav"]):
+def _speech_files(speech_folder, keep=(".wav",)):
 	walk = os.walk(speech_folder, followlinks=True)
 	# Skip .WAV (uppercase) files as these are unprocessed timit sphere files (i.e. don't use os.path.splitext(fn)[-1].lower())
 	walk = ((dp, dn, [fn for fn in filenames if os.path.splitext(fn)[-1] in keep])
@@ -192,7 +191,7 @@ def create(args):
 			# Save degradation instructions so that a sample can be recreated if needed
 			m_eng.save(os.path.join(output_t, "degradations.mat"), "speech_files", "degradations", "output_files", nargout=0)
 			
-		except matlab.engine.MatlabExecutionError as e: # pylint: disable=no-member
+		except matlab.engine.MatlabExecutionError as e:
 			print(e, file=sys.stderr)
 			print("A Matlab error occurred", file=sys.stderr)
 			print("Launching Matlab desktop so you may debug. Press enter to exit.", end="", flush=True, file=sys.stderr)
@@ -270,7 +269,6 @@ def prepare(args):
 	print(f"Prepared {tot} speech files")
 
 if __name__ == "__main__":
-	global project_root
 	project_root = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
 
 	parser = argparse.ArgumentParser(

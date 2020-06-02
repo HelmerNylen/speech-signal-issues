@@ -1,0 +1,5 @@
+[MESSAGES CONTROL]
+disable=R,C,fixme,redefined-outer-name
+generated-members=numpy.*,torch.*,matlab.*
+[FORMAT]
+indent-string=\t

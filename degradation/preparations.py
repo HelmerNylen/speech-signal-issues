@@ -58,7 +58,7 @@ def prep_folder(folder, recursive=False, prompt=False, skip_if_fixed=True, to_mo
 		files = [os.path.join(folder, f) for f in next(os.walk(folder))[2]]
 	commands = []
 
-	with NamedTemporaryFile() as tmp:
+	with NamedTemporaryFile(suffix=".wav") as tmp:
 		# Iterate over all audio files found
 		for f in files:
 			path, ext = os.path.splitext(f)
