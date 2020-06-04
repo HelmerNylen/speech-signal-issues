@@ -1,4 +1,5 @@
 import os
+import re
 from matlab.engine import MatlabEngine
 from random import choice
 
@@ -6,7 +7,7 @@ additive_noise_prefix = "additive-"
 
 # Define degradation names here
 def get_degradations(noise_files: dict) -> list:
-	res = [None, "pad", "white"]
+	res = [None, "pad", "white", "clipping", "mute"]
 	res.extend(additive_noise_prefix + k for k in noise_files.keys())
 	return res
 
@@ -64,7 +65,7 @@ def setup_matlab_degradations(noise_files: dict, speech_files: list, degradation
 				matlab_degradations_by_file[-1].append({"name": name, "params": params})
 
 			# Pad a sample with silence.
-			# Does not degrade the sample in the same sense, but still an operation we want to do as part of the same pipeline
+			# Does not degrade the sample in the same sense, but still an operation we want to do as part of the same pipeline.
 			elif degradation == "pad":
 				if degradation_parameters.get("pad", None) is None:
 					raise ValueError("Please specify padding amount to apply padding")
@@ -89,6 +90,40 @@ def setup_matlab_degradations(noise_files: dict, speech_files: list, degradation
 					"normalizeOutputAudio": normalize_audio
 				}
 				has_normalized = normalize_audio
+
+				matlab_degradations_by_file[-1].append({"name": name, "params": params})
+			
+			# Apply soft or hard clipping.
+			elif degradation == "clipping":
+				if degradation_parameters.get("clipAmount", None) is None:
+					raise ValueError("Please specify clipAmount to apply clipping")
+
+				name = {
+					"hard": "applyClippingAlternative",
+					"soft": "applySoftClipping"
+				}.get(degradation_parameters.get("clip_type", "hard").lower(), None)
+				if name is None:
+					raise ValueError(f"Invalid clip_type: {degradation_parameters['clip_type']}. Must be one of 'soft', 'hard'.")
+				
+				params = {
+					"percentOfSamples": degradation_parameters["clip_amount"]
+				}
+				# Soft clipping reduces the maximum signal value to 2/3
+				has_normalized = True
+
+				matlab_degradations_by_file[-1].append({"name": name, "params": params})
+			
+			# Apply random muting.
+			elif degradation == "mute":
+				if degradation_parameters.get("mute_percent", None) is None \
+						and degradation_parameters.get("total_mute_length", None) is None:
+					raise ValueError("Please specify mute_percent or total_mute_length to apply clipping")
+				
+				name = "applyMute"
+				params = {re.sub("_.", lambda s: s[0][1].upper(), field): degradation_parameters[field]
+					for field in ("mute_percent", "total_mute_length",
+						"mute_length_min", "mute_length_max", "mute_pause_min")
+							if degradation_parameters.get(field, None) is not None}
 
 				matlab_degradations_by_file[-1].append({"name": name, "params": params})
 

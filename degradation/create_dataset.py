@@ -6,6 +6,8 @@ import math
 import csv
 from time import time
 
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
+
 def _noise_files(noise_folder, keep=(".wav",)):
 	walk = os.walk(noise_folder, followlinks=True)
 	# Skip .WAV (uppercase) files as these are unprocessed timit sphere files (i.e. don't use os.path.splitext(fn)[-1].lower())
@@ -128,7 +130,7 @@ def create(args):
 	# Setup Matlab
 	print("Setting up Matlab ...", end="", flush=True)
 	m_eng = m_eng.result()
-	m_eng.cd(os.path.join(project_root, "degradation"), nargout=0)
+	m_eng.cd(os.path.join(PROJECT_ROOT, "degradation"), nargout=0)
 	args.adt = os.path.join(args.adt, "AudioDegradationToolbox")
 	if not os.path.exists(args.adt):
 		print("\nAudio Degradation Toolbox folder does not exist:", args.adt, file=sys.stderr)
@@ -155,8 +157,11 @@ def create(args):
 			sys.exit(1)
 	else:
 		for folder in (dataset_folder, output_train, output_test):
-			os.mkdir(folder)
-			print("Created", folder)
+			try:
+				os.mkdir(folder)
+				print("Created", folder)
+			except FileExistsError:
+				print(folder, "already exists")
 
 	# Create datasets
 	for t, speech_t, labels_t, noise_t, output_t in [
@@ -199,6 +204,7 @@ def create(args):
 			input()
 			raise e
 		
+		# Save the labels.csv file
 		print("\tSaving labels")
 		label_file = os.path.join(output_t, "labels.csv")
 		with open(label_file, "w", newline='') as f:
@@ -210,6 +216,9 @@ def create(args):
 						+ tuple(int(label == i) for i in range(len(args.classes))))
 
 		print("Done")
+	
+	with open(os.path.join(dataset_folder, "info.txt"), "w") as f:
+		print("Arguments:", vars(args), file=f)
 		
 	m_eng.exit()
 	print("Dataset created")
@@ -269,8 +278,6 @@ def prepare(args):
 	print(f"Prepared {tot} speech files")
 
 if __name__ == "__main__":
-	project_root = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
-
 	parser = argparse.ArgumentParser(
 		prog="create_dataset.py",
 		description="Introduce problems into speech recordings"
@@ -282,29 +289,36 @@ if __name__ == "__main__":
 
 	group = parser.add_argument_group("input folders")
 	group.add_argument("--speech", help="The folder containing speech recordings. This is explored recursively. Default: %(default)s",
-			default=os.path.join(project_root, "timit"), metavar="FOLDER")
+			default=os.path.join(PROJECT_ROOT, "timit"), metavar="FOLDER")
 	group.add_argument("--noise", help="The folder containing noise recordings. Noise files should be grouped by type in subfolders (e.g. noise/air-conditioning/, noise/electric-hum/). Default: %(default)s",
-			default=os.path.join(project_root, "noise"), metavar="FOLDER")
+			default=os.path.join(PROJECT_ROOT, "noise"), metavar="FOLDER")
 
 	subparser = subparsers.add_parser("create", help="Create a dataset from available speech and noise")
 	subparser.set_defaults(func=create)
 
-	subparser.add_argument("name", help="Name of the new dataset",
-			metavar="MyDataset")
+	subparser.add_argument("name", help="Name of the new dataset", metavar="MyDataset")
 	subparser.add_argument("-o", "--overwrite", help="If the dataset already exists, overwrite it. CAUTION: Existing files are deleted without prompt.", action="store_true")
 	subparser.add_argument("-d", "--datasets", help="The folder containing all datasets (default: %(default)s)",
-			default=os.path.join(project_root, "datasets"), metavar="FOLDER")
+			default=os.path.join(PROJECT_ROOT, "datasets"), metavar="FOLDER")
 	subparser.add_argument("--adt", help="Path to Audio Degradation Toolbox root folder (default: %(default)s)",
-			default=os.path.join(project_root, "degradation", "adt"), metavar="FOLDER")
+			default=os.path.join(PROJECT_ROOT, "degradation", "adt"), metavar="FOLDER")
 
+	# TODO: definiera degradations via jsonfiler
 	group = subparser.add_argument_group("degradation parameters")
 	group.add_argument("--snr", help="Signal-to-noise ratio in dB (speech is considered signal)", type=float, default=None)
 	# TODO: implement?
 	# Currently, noise is down- or upsampled to match speech
 	# group.add_argument("--downsample-speech", help="Downsample speech signal if noise sample rate is lower", action="store_true")
 	group.add_argument("-p", "--pad", help="Pad the speech with PAD seconds of silence at the beginning and end", type=float, default=None)
+	group.add_argument("--clip-amount", help="Percentage of samples which will be considered out of range", type=float, default=None)
+	group.add_argument("--clip-type", help="Type of clipping to use, either 'soft' or 'hard'", default="hard", choices=("soft", "hard"), type=str.lower)
+	group.add_argument("--mute-percent", help="Percentage of samples which will be muted", type=float, default=None)
+	group.add_argument("--total-mute-length", help="Total time in seconds which will be muted", type=float, default=None)
+	group.add_argument("--mute-length-min", help="Minimum length of a mute segment in seconds", type=float, default=None)
+	group.add_argument("--mute-length-max", help="Maximum desired length of a mute segment in seconds", type=float, default=None)
+	group.add_argument("--mute-pause-min", help="Minimum pause between mute segments in seconds", type=float, default=None)
 
-	subparser.add_argument("-c", "--classes", help="The class types to use in addition to silence (default: all)", metavar="CLASS", nargs="+", default=[])
+	subparser.add_argument("-c", "--classes", help="The class types to use (default: all)", metavar="CLASS", nargs="+", default=[])
 	subparser.add_argument("--train", help="Ratio/number of files in training set (default: %(default).2f)", default=11/15, type=float)
 	subparser.add_argument("--test", help="Ratio/number of files in testing set (default: %(default).2f)", default=4/15, type=float)
 	subparser.add_argument("--no-cache", help="Disable caching noise files. Increases runtime but decreases memory usage.", action="store_true")
