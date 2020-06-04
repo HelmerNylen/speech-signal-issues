@@ -2,6 +2,9 @@ import sys
 import subprocess
 
 def mfcc_kaldi(filenames, **kwargs):
+	from .utils import check_kaldi_root
+	check_kaldi_root()
+
 	import kaldi_io
 	from tempfile import NamedTemporaryFile
 

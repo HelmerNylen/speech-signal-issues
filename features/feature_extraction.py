@@ -2,12 +2,13 @@ import os
 import csv
 import numpy as np
 from .mfcc import mfcc_kaldi, mfcc_librosa
+from .custom import acf
 from .utils import root_folder, concat_samples
 
 CACHE_SIZE = 10
 
 def get_available_features() -> tuple:
-	feats = (mfcc_kaldi, mfcc_librosa)
+	feats = (mfcc_kaldi, mfcc_librosa, acf)
 	return tuple(f.__name__ for f in feats), feats
 
 def read_dataset(name: str, partition: str, label: str=None) -> tuple:

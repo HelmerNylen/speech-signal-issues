@@ -1,5 +1,5 @@
 [MESSAGES CONTROL]
-disable=R,C,fixme,redefined-outer-name
+disable=R,C,fixme,redefined-outer-name,not-callable
 generated-members=numpy.*,torch.*,matlab.*
 [FORMAT]
 indent-string=\t
