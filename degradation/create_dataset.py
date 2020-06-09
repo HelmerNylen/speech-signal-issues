@@ -4,6 +4,7 @@ import sys
 import argparse
 import math
 import csv
+import json
 from time import time
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__file__)), os.pardir))
@@ -42,6 +43,12 @@ def _filenames(folder: str, num: int, ext: str):
 	for i in range(1, num + 1):
 		yield os.path.join(folder, str(i).rjust(math.ceil(math.log10(num)), '0') + ext)
 
+def _labels(_type: dict) -> list:
+	if "label" in _type:
+		return [_type["label"]]
+	else:
+		return _type.get("labels", [])
+
 def create(args):
 	# Matlab must be loaded before any module which depends on random
 	print("Importing Matlab ...", end="", flush=True)
@@ -49,7 +56,7 @@ def create(args):
 	print(" Done")
 
 	import random
-	from degradations import get_degradations, setup_matlab_degradations
+	from degradations import setup_matlab_degradations
 
 	# Begin starting Matlab asynchronously
 	m_eng = matlab.engine.start_matlab(background=True)
@@ -65,45 +72,34 @@ def create(args):
 		print("No speech files found", file=sys.stderr)
 		sys.exit(1)
 
-	# Parse and verify degradation classes
-	available_classes = [d for d in get_degradations(noise) if d not in ("pad",)]
-	if len(args.classes) == 0 or args.classes == ["all"]:
-		args.classes = map(str, available_classes)
-	tmp = []
-	for c in args.classes:
-		try:
-			tmp.append(available_classes[available_classes.index(None if c.lower() == "none" else c.lower())])
-		except ValueError:
-			print(f"Unknown degradation class \"{c}\"", file=sys.stderr)
-			print("Available:", ", ".join(available_classes), file=sys.stderr)
-			print(file=sys.stderr)
-			print("(Stopping Matlab ...", end="", flush=True)
-			m_eng.cancel()
-			print(" Done)")
-			sys.exit(1)
-	args.classes = tmp
-	n_classes = len(args.classes)
-	del tmp
+	if not os.path.exists(args.specification):
+		print("File not found:", args.specification, file=sys.stderr)
+		sys.exit(1)
+	
+	with open(args.specification, "r") as f:
+		spec = json.load(f)
 
 	# Verify partition
-	if 0 <= args.train <= 1:
-		args.train = round(args.train * n_speechfiles)
+	ds_train = spec["train"]
+	ds_test = spec["test"]
+	if 0 <= ds_train <= 1:
+		ds_train = round(ds_train * n_speechfiles)
 	else:
-		args.train = int(args.train)
-	if 0 <= args.test <= 1:
-		args.test = round(args.test * n_speechfiles)
+		ds_train = int(ds_train)
+	if 0 <= ds_test <= 1:
+		ds_test = round(ds_test * n_speechfiles)
 	else:
-		args.test = int(args.test)
-	if args.train < 0 or args.test < 0 or args.train + args.test > n_speechfiles:
-		print(f"Invalid partition of files: {args.train} train, {args.test} test, {args.train + args.test} total", file=sys.stderr)
+		ds_test = int(ds_test)
+	if ds_train < 0 or ds_test < 0 or ds_train + ds_test > n_speechfiles:
+		print(f"Invalid partition of files: {ds_train} train, {ds_test} test, {ds_train + ds_test} total", file=sys.stderr)
 		sys.exit(1)
-	print(f"Speech: {args.train} training files and {args.test} testing files")
+	print(f"Speech: {ds_train} training files and {ds_test} testing files")
 	
 	# Partition speech set
 	speech = [os.path.join(dirpath, filepath) for dirpath, filepaths in speech for filepath in filepaths]
 	random.shuffle(speech)
-	speech_train = speech[:args.train]
-	speech_test = speech[args.train:args.train + args.test]
+	speech_train = speech[:ds_train]
+	speech_test = speech[ds_train:ds_train + ds_test]
 	del speech
 
 	# Partition noise set
@@ -113,19 +109,43 @@ def create(args):
 	for noise_type, tup in noise.items():
 		folder, files = tup
 		random.shuffle(files)
-		split = round(len(files) * args.train / (args.train + args.test))
+		split = round(len(files) * ds_train / (ds_train + ds_test))
 		noise_train[noise_type] = (folder, files[:split])
 		noise_test[noise_type] = (folder, files[split:])
 		print(f"\t{noise_type}: {split} training files and {len(files) - split} testing files")
 	del noise
 
-	# Assign noise types to speech files
-	labels_train = list(range(n_classes)) * (len(speech_train) // n_classes)
-	labels_train = labels_train + ([n_classes - 1] * (len(speech_train) - len(labels_train)))
-	random.shuffle(labels_train)
-	labels_test = list(range(n_classes)) * (len(speech_test) // n_classes)
-	labels_test = labels_test + ([n_classes - 1] * (len(speech_test) - len(labels_test)))
-	random.shuffle(labels_test)
+	# Verify degradation type labels
+	for i, _type in enumerate(spec["types"]):
+		for label in _labels(_type):
+			if label not in spec["labels"]:
+				print(f"Warning: Label '{label}' on type {i} not among the dataset's labels ({', '.join(spec['labels'])})", file=sys.stderr)
+	for label in spec["labels"]:
+		if isinstance(label, str):
+			has_double = sum(label.lower() == l.lower() for l in spec["labels"] if isinstance(l, str)) > 1
+		else:
+			has_double = sum(label == l for l in spec["labels"]) > 1
+		if has_double:
+			print(f"Label {label} has a{' case-insensitive' if isinstance(label, str) else ''} double")
+			sys.exit(1)
+
+
+	# Assign degradation types indexes to speech files
+	# TODO: testa
+	import numpy as np
+	n_types = len(spec["types"])
+	weights = [t.get("weight", 1) for t in spec["types"]]
+	weight_sum = sum(weights)
+
+	types_train = [i for i, t in enumerate(spec["types"]) for _ in range(int(t["weight"] * len(speech_train) // weight_sum))]
+	types_train = types_train + random.choices(range(len(spec["types"])), weights, k=len(speech_train) - len(types_train))
+	print(np.bincount(types_train) / np.bincount(types_train)[0])
+	random.shuffle(types_train)
+
+	types_test = [i for i, t in enumerate(spec["types"]) for _ in range(int(t["weight"] * len(speech_test) // weight_sum))]
+	types_test = types_test + random.choices(range(len(spec["types"])), weights, k=len(speech_test) - len(types_test))
+	print(np.bincount(types_test) / np.bincount(types_test)[0])
+	random.shuffle(types_test)
 
 	# Setup Matlab
 	print("Setting up Matlab ...", end="", flush=True)
@@ -138,12 +158,12 @@ def create(args):
 	print(" Done")
 
 	# Create output directory
-	dataset_folder = os.path.join(args.datasets, args.name)
+	dataset_folder = os.path.join(args.datasets, spec["name"])
 	output_train = os.path.join(dataset_folder, "train")
 	output_test = os.path.join(dataset_folder, "test")
 	if os.path.exists(dataset_folder) and sum(len(fns) for _, _, fns in os.walk(dataset_folder, followlinks=True)) > 1:
 		if args.overwrite:
-			print("Dataset", args.name, "already exists. Removing existing files.")
+			print("Dataset", spec["name"], "already exists. Removing existing files.")
 			c = 0
 			for folder in (output_train, output_test):
 				if not os.path.exists(folder):
@@ -153,7 +173,7 @@ def create(args):
 					c += 1
 			print(f"Removed {c} file{'s' if c != 1 else ''}")
 		else:
-			print("Dataset", args.name, "already exists", file=sys.stderr)
+			print("Dataset", spec["name"], "already exists", file=sys.stderr)
 			sys.exit(1)
 	else:
 		for folder in (dataset_folder, output_train, output_test):
@@ -164,21 +184,20 @@ def create(args):
 				print(folder, "already exists")
 
 	# Create datasets
-	for t, speech_t, labels_t, noise_t, output_t in [
-		["train", speech_train, labels_train, noise_train, output_train],
-		["test", speech_test, labels_test, noise_test, output_test]
+	for t, speech_t, types_t, noise_t, output_t in [
+		["train", speech_train, types_train, noise_train, output_train],
+		["test", speech_test, types_test, noise_test, output_test]
 	]:
 		print(f"Creating {t}ing data")
 
 		print("\tSetting up Matlab arguments")
-		degradations = [args.classes[label] for label in labels_t]
-		if args.pad is not None:
-			degradations = [["pad", degradation] for degradation in degradations]
+		degradations = [spec["types"][_type]["degradations"] for _type in types_t]
+
 		# Load degradation instructions into Matlab memory
 		# The overhead for passing audio data between Python and Matlab is extremely high,
 		# so Matlab is only sent the filenames and left to figure out the rest for itself
 		# Further, certain datatypes (struct arrays) cannot be sent to/from Python
-		setup_matlab_degradations(noise_t, speech_t, degradations, m_eng, vars(args), "degradations")
+		setup_matlab_degradations(speech_t, degradations, noise_t, m_eng, "degradations")
 
 		# Store all variables in Matlab memory
 		output_files = list(_filenames(output_t, len(speech_t), ".wav"))
@@ -210,22 +229,24 @@ def create(args):
 		with open(label_file, "w", newline='') as f:
 			writer = csv.writer(f)
 			writer.writerow(("Filename",)
-					+ tuple(str(c).lower() for i, c in enumerate(args.classes) if i in labels_t))
-			for filename, label in zip(output_files, labels_t):
+					+ tuple(str(l).lower() for l in spec["labels"]))
+			for filename, typeind in zip(output_files, types_t):
+				labels = _labels(spec["types"][typeind])
 				writer.writerow((os.path.basename(filename),)
-						+ tuple(int(label == i) for i in range(len(args.classes))))
+						+ tuple(int(l in labels) for l in spec["labels"]))
 
 		print("Done")
 	
-	with open(os.path.join(dataset_folder, "info.txt"), "w") as f:
-		print("Arguments:", vars(args), file=f)
+	with open(os.path.join(dataset_folder, "source.json"), "w") as f:
+		json.dump(spec, f)
+	print("Wrote source.json")
 		
 	m_eng.exit()
 	print("Dataset created")
 
 def list_files(args):
 	# This currently imports Matlab (in degradations) and doesn't need to
-	from degradations import get_degradations
+	from degradations import DEGRADATIONS
 
 	if not os.path.exists(args.noise):
 		print(f"Noise folder {args.noise} does not exist", file=sys.stderr)
@@ -245,7 +266,7 @@ def list_files(args):
 	print(f"Found {n_speechfiles} speech files")
 	for t in ("test", "train"):
 		print(f"\t{sum(len(fs) for d, fs in speech if t in d.lower())} in set \"{t}\"")
-	print(f"Noise types: {', '.join(s for s in map(str, get_degradations(noise)) if s != 'pad')}")
+	print(f"Noise types: {', '.join(s for s in DEGRADATIONS if s != 'pad')}")
 
 def prepare(args):
 	from preparations import prep_folder
@@ -296,31 +317,22 @@ if __name__ == "__main__":
 	subparser = subparsers.add_parser("create", help="Create a dataset from available speech and noise")
 	subparser.set_defaults(func=create)
 
-	subparser.add_argument("name", help="Name of the new dataset", metavar="MyDataset")
+	subparser.add_argument("specification", help="JSON file with a dataset specification", metavar="myfile.json")
+	# TODO: Ability to override these on the command line? (Why?)
+	#subparser.add_argument("-n", "--name", help="Override name of the new dataset", metavar="MyDataset", default=None)
+	#subparser.add_argument("--train", help="Override ratio/number of files in training set", default=None, type=float)
+	#subparser.add_argument("--test", help="Override ratio/number of files in testing set", default=None, type=float)
+
+	# TODO: implement?
+	# Currently, noise is down- or upsampled to match speech
+	# Supposedly already taken care of by 'prepare'
+	# subparser.add_argument("--downsample-speech", help="Downsample speech signal if noise sample rate is lower", action="store_true")
+
 	subparser.add_argument("-o", "--overwrite", help="If the dataset already exists, overwrite it. CAUTION: Existing files are deleted without prompt.", action="store_true")
 	subparser.add_argument("-d", "--datasets", help="The folder containing all datasets (default: %(default)s)",
 			default=os.path.join(PROJECT_ROOT, "datasets"), metavar="FOLDER")
 	subparser.add_argument("--adt", help="Path to Audio Degradation Toolbox root folder (default: %(default)s)",
 			default=os.path.join(PROJECT_ROOT, "degradation", "adt"), metavar="FOLDER")
-
-	# TODO: definiera degradations via jsonfiler
-	group = subparser.add_argument_group("degradation parameters")
-	group.add_argument("--snr", help="Signal-to-noise ratio in dB (speech is considered signal)", type=float, default=None)
-	# TODO: implement?
-	# Currently, noise is down- or upsampled to match speech
-	# group.add_argument("--downsample-speech", help="Downsample speech signal if noise sample rate is lower", action="store_true")
-	group.add_argument("-p", "--pad", help="Pad the speech with PAD seconds of silence at the beginning and end", type=float, default=None)
-	group.add_argument("--clip-amount", help="Percentage of samples which will be considered out of range", type=float, default=None)
-	group.add_argument("--clip-type", help="Type of clipping to use, either 'soft' or 'hard'", default="hard", choices=("soft", "hard"), type=str.lower)
-	group.add_argument("--mute-percent", help="Percentage of samples which will be muted", type=float, default=None)
-	group.add_argument("--total-mute-length", help="Total time in seconds which will be muted", type=float, default=None)
-	group.add_argument("--mute-length-min", help="Minimum length of a mute segment in seconds", type=float, default=None)
-	group.add_argument("--mute-length-max", help="Maximum desired length of a mute segment in seconds", type=float, default=None)
-	group.add_argument("--mute-pause-min", help="Minimum pause between mute segments in seconds", type=float, default=None)
-
-	subparser.add_argument("-c", "--classes", help="The class types to use (default: all)", metavar="CLASS", nargs="+", default=[])
-	subparser.add_argument("--train", help="Ratio/number of files in training set (default: %(default).2f)", default=11/15, type=float)
-	subparser.add_argument("--test", help="Ratio/number of files in testing set (default: %(default).2f)", default=4/15, type=float)
 	subparser.add_argument("--no-cache", help="Disable caching noise files. Increases runtime but decreases memory usage.", action="store_true")
 	
 	subparser = subparsers.add_parser("prepare", help="Prepare the audio files in the dataset (convert from nist to wav, stereo to mono etc.)")

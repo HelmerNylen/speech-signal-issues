@@ -11,7 +11,7 @@ function create_samples(speech_files, degradations, output_files, use_cache, adt
 %                           degradations to perform on any file. Each
 %                           element of degradations should have two fields:
 %                             name      a string with the degradation unit
-%                                         name. Set to [] or "" for no
+%                                         name. Set to "" for no
 %                                         degradation.
 %                             params    a struct with the parameters passed
 %                                         to the degradation function

@@ -1,0 +1,112 @@
+{
+	"name":		"JSON-Test",
+	"train": 	0.75,
+	"test":		0.25,
+	"labels":	["none", "mute", "clipping", "add-white", "add-aircon", "add-hum"],
+	"types":	[
+		{
+			"label": "none",
+			"weight": 1,
+			"degradations": [
+				{
+					"name": "pad",
+					"before": 1,
+					"after": 1
+				}, {
+					"name": "normalize"
+				}
+			]
+		}, {
+			"label": "mute",
+			"weight": 1,
+			"degradations": [
+				{
+					"name": "applyMute",
+					"mutePercent": 20,
+					"muteLengthMin": 0.1,
+					"muteLengthMax": 0.75,
+					"mutePauseMin": 0.05
+				}, {
+					"name": "pad",
+					"before": 1,
+					"after": 1
+				}, {
+					"name": "normalize"
+				}
+			]
+		}, {
+			"label": "clipping",
+			"weight": 0.5,
+			"degradations": [
+				{
+					"name": "applyClippingAlternative",
+					"percentOfSamples": 20
+				}, {
+					"name": "pad",
+					"before": 1,
+					"after": 1
+				}
+			]
+		}, {
+			"label": "clipping",
+			"weight": 0.5,
+			"degradations": [
+				{
+					"name": "applySoftClipping",
+					"percentOfSamples": 20
+				}, {
+					"name": "pad",
+					"before": 1,
+					"after": 1
+				}
+			]
+		}, {
+			"label": "add-white",
+			"weight": 0.34,
+			"degradations": [
+				{
+					"name": "pad",
+					"before": 1,
+					"after": 1
+				},{
+					"name": "addNoise",
+					"noiseColor": "white",
+					"snrRatio": 40,
+					"normalizeOutputAudio": true
+				}
+			]
+		}, {
+			"label": "add-aircon",
+			"weight": 0.33,
+			"degradations": [
+				{
+					"name": "pad",
+					"before": 1,
+					"after": 1
+				},{
+					"name": "addSound",
+					"addSoundFile": {"randomNoiseFile": "aircon"},
+					"addSoundFileStart": "random",
+					"snrRatio": 40,
+					"normalizeOutputAudio": true
+				}
+			]
+		}, {
+			"label": "add-hum",
+			"weight": 0.33,
+			"degradations": [
+				{
+					"name": "pad",
+					"before": 1,
+					"after": 1
+				},{
+					"name": "addSound",
+					"addSoundFile": {"randomNoiseFile": "electric-hum"},
+					"addSoundFileStart": "random",
+					"snrRatio": 40,
+					"normalizeOutputAudio": true
+				}
+			]
+		}
+	]
+}
