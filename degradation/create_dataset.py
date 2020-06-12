@@ -322,6 +322,7 @@ if __name__ == "__main__":
 	#subparser.add_argument("-n", "--name", help="Override name of the new dataset", metavar="MyDataset", default=None)
 	#subparser.add_argument("--train", help="Override ratio/number of files in training set", default=None, type=float)
 	#subparser.add_argument("--test", help="Override ratio/number of files in testing set", default=None, type=float)
+	# TODO: maybe add ability to filter which labels should be used in the dataset? (Label groups?)
 
 	# TODO: implement?
 	# Currently, noise is down- or upsampled to match speech
