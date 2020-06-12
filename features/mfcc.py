@@ -9,18 +9,20 @@ def mfcc_kaldi(filenames, **kwargs):
 	from tempfile import NamedTemporaryFile
 
 	with NamedTemporaryFile(suffix=".ark") as ark:
-		result = subprocess.run([
+		cmd = [
 			'compute-mfcc-feats',
 			*(f"--{key}={val}" for key, val in kwargs),
 			'scp:-',
-			'ark:' + ark.name],
+			'ark:' + ark.name
+		]
+		#print(*cmd)
+		result = subprocess.run(cmd,
 			input="\n".join(fn + " " + fn
 				for fn in filenames) + "\n",
 			encoding=sys.getdefaultencoding(),
 			stderr=subprocess.PIPE,
 			check=False
 		)
-		print(" Done")
 		if result.returncode:
 			print(result.stderr)
 			result.check_returncode()
@@ -29,7 +31,7 @@ def mfcc_kaldi(filenames, **kwargs):
 				if not line.startswith("LOG") and line.strip() != " ".join(result.args).strip():
 					print(line)
 	
-	return [mat for _, mat in kaldi_io.read_mat_ark(ark)]
+		return [mat for _, mat in kaldi_io.read_mat_ark(ark)]
 
 def mfcc_librosa(filenames, **kwargs):
 	from librosa.core import load

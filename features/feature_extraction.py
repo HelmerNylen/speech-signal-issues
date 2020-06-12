@@ -23,7 +23,7 @@ def read_dataset(name: str, partition: str, label: str=None) -> tuple:
 		classes = next(reader)[1:]
 		filenames, labels = zip(*((line[0], line[1:]) for line in reader))
 
-	filenames = np.array(filenames)
+	filenames = np.array([os.path.join(files_root, fn) for fn in filenames])
 	classes = np.array(classes)
 	labels = np.array(labels) != '0'
 
@@ -37,36 +37,36 @@ def read_dataset(name: str, partition: str, label: str=None) -> tuple:
 			raise ValueError(f"Label {label} not found in dataset {name}") from e
 
 def _filename(filenames: list, features: list, feature_args: list):
-	_hash = hash((tuple(filenames), tuple(features), tuple(tuple(d.items()) for d in feature_args))) 
+	from pickle import dumps
+	from hashlib import sha256
+	obj = (tuple(filenames), tuple(features), tuple(sorted(tuple(d.items())) for d in feature_args))
+	_hash = sha256(dumps(obj)).hexdigest()
 	return os.path.join(root_folder(), "features", "cache", str(_hash) + ".features")
 
-# TODO: combine features (how?)
 def extract_features(filenames: list, features: list, feature_args: list,
 		concatenate: bool=False, cache: bool=True) -> list:
+
+	if len(features) != len(feature_args):
+		raise ValueError(f"Number of features ({len(features)} does not match number of provided feature args ({len(feature_args)})")
 
 	cache_filename = _filename(filenames, features, feature_args)
 	if cache and os.path.exists(cache_filename):
 		from pickle import load
 		with open(cache_filename, "rb") as f:
 			cached_tuple, feature_vals = load(f)
-		if cached_tuple == (filenames, features, feature_args):
+		if (cached_tuple[0] == filenames).all() and cached_tuple[1:] == (features, feature_args):
 			return feature_vals
 		else:
 			del cached_tuple, feature_vals
 
 	available_features = get_available_features()
 	feature_vals = []
-	for feature_ind, feature_name in enumerate(features):
+	for feature_name, args in zip(features, feature_args):
 		if feature_name not in available_features[0]:
 			raise ValueError(f"Unrecognized feature {feature_name}")
 		feature_func = available_features[1][available_features[0].index(feature_name)]
 
-		if feature_ind >= len(feature_args):
-			raise ValueError(f"No arguments to feature {feature_ind} ({feature_name}) were provided. "
-					+ "If none are needed, specify an empty dict.")
-		args = feature_args[feature_ind]
-
-		feature_vals[feature_ind] = feature_func(filenames, **args)
+		feature_vals.append(feature_func(filenames, **args))
 	
 	if cache:
 		from pickle import dump
@@ -79,6 +79,7 @@ def extract_features(filenames: list, features: list, feature_args: list,
 	
 	return feature_vals
 
+# For compability with older classifiers
 def extract_dataset_features(name: str, partition: str, features: list, feature_args: list,
 		concatenate: bool=False, cache: bool=True) -> dict:
 
