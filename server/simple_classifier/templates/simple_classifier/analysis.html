@@ -1,0 +1,30 @@
+<h1>Analys av {{filename}}</h1>
+{% for classifierName in predictions %}
+<div>
+	<strong>{{classifierName}}</strong>
+	<br />
+	<table>
+		<tr>
+			<td>
+				Störningstyp
+			</td>
+			{% for noise_type, score in scores|get_item:classifierName %}
+			<td>
+				{{noise_type}}
+			</td>
+			{% endfor %}
+		</tr>
+		<tr>
+			<td>
+				Matchningspoäng
+			</td>
+			{% for noise_type, score in scores|get_item:classifierName %}
+			<td>
+				{{score}}
+			</td>
+			{% endfor %}
+		</tr>
+	</table>
+	Slutsats: <strong>{{predictions|get_item:classifierName}}</strong>
+</div>
+{% endfor %}

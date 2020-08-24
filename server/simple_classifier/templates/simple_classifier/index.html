@@ -1,0 +1,46 @@
+<html>
+	<head>
+		<title>{{ app_name }}</title>
+		<style>
+			@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,700;1,400&display=swap');
+			body {
+				margin: 0;
+				font-family: 'Nunito', sans-serif;
+			}
+			#header {
+				background-color: #ffd700;
+				padding: 1em;
+			}
+			#header strong {
+				font-size: 32px;
+			}
+			#main {
+				text-align: center;
+			}
+			#footer {
+				float: right;
+				font-size: 10px;
+				padding: 1em;
+				background-color: white;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="header">
+			<strong>{{ app_name }}</strong>
+		</div>
+		<div id="main">
+			Ladda upp ljudfilen du vill analysera här
+			<br />
+			<form action="/" method="post" enctype="multipart/form-data">
+				{% csrf_token %}
+				{{ form }}
+				<br />
+				<input type="submit" value="Analysera" />
+			</form>
+		</div>
+		<div id="footer">
+			Helmer Nylén 2020
+		</div>
+	</body>
+</html>
