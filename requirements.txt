@@ -1,0 +1,11 @@
+# sudo apt-get install llvm
+wheel==0.30.0
+llvmlite==0.32.1
+numpy==1.18.3
+hmmlearn==0.2.3
+librosa==0.7.2
+torch==1.1.0
+kaldi_io==0.9.4
+# Matlab is not installed via pip
+# instead goto {matlab_root}/extern/engines/python/ and run "python setup.py install"
+# matlab==0.1

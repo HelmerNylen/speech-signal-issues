@@ -1,6 +1,7 @@
 # -- Project-specific --
 .vscode/
 features/kaldi*
+pyenv/
 
 # -- GitHub Python default --
 # Byte-compiled / optimized / DLL files

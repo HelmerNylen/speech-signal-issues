@@ -1,3 +1,5 @@
+[MASTER]
+init-hook='import sys; sys.path.append("")'
 [MESSAGES CONTROL]
 disable=R,C,fixme,redefined-outer-name,not-callable
 generated-members=numpy.*,torch.*,matlab.*
