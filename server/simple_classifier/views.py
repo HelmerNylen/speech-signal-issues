@@ -1,27 +1,30 @@
-from django.shortcuts import render
-from django.http import HttpResponse, HttpResponseRedirect
+from django.shortcuts import render, redirect
+from django.http import HttpResponse
 from .forms import AudioFileForm
 from .classifier_webinterface import analyze_file
 
+app_name = "Signalfelsupptäckaren"
 # Create your views here.
 def index(request):
-	if request.method == 'POST':
-		form = AudioFileForm(request.POST, request.FILES)
-		if form.is_valid():
-			predictions, scores = analyze_file(request.FILES['audiofile'])
-			return render(request, "simple_classifier/analysis.html", {
-				"filename": request.FILES['audiofile'].name,
-				"predictions": predictions,
-				"scores": scores
-			})
-	else:
-		form = AudioFileForm()
-		
+	form = AudioFileForm()
 	context = {
-		"app_name": "Signalfelsupptäckaren",
+		"app_name": app_name,
 		"form": form
 	}
 	return render(request, "simple_classifier/index.html", context)
+
+def analysis(request):
+	if request.method == 'POST':
+		form = AudioFileForm(request.POST, request.FILES)
+		if form.is_valid():
+			analyses = analyze_file(request.FILES['audiofile'])
+			return render(request, "simple_classifier/analysis.html", {
+				"app_name": app_name,
+				"filename": request.FILES['audiofile'].name,
+				"analyses": analyses
+			})
+
+	return redirect('/')
 
 
 # Because for some reason this is not included by default
