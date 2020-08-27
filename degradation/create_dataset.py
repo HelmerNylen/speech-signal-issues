@@ -238,7 +238,7 @@ def create(args):
 		print("Done")
 	
 	with open(os.path.join(dataset_folder, "source.json"), "w") as f:
-		json.dump(spec, f)
+		json.dump(spec, f, indent='\t')
 	print("Wrote source.json")
 		
 	m_eng.exit()

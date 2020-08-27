@@ -263,6 +263,9 @@ if __name__ == "__main__":
 	subparser = subparsers.add_parser("list", help="List all classifiers in <MODELS>")
 	subparser.set_defaults(func=_list)
 
+	subparser = subparsers.add_parser("available-types", help="List the available classifier types")
+	subparser.set_defaults(func=lambda a: print(*supported_types, sep='\n'), silent=True)
+
 	args = parser.parse_args()
 	if args.profile:
 		import cProfile

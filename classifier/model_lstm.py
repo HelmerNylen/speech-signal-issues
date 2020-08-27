@@ -23,6 +23,11 @@ class LSTM(Model):
 
 		if "input_dim" in config["parameters"]:
 			self.init_lstm(config["parameters"]["input_dim"])
+
+		self.rescale = config["train"].get("rescale_samples", False)
+		if self.rescale:
+			self.means = None
+			self.stddevs = None
 	
 	def __try_push_cuda(self):
 		if torch.cuda.is_available():
@@ -73,6 +78,11 @@ class LSTM(Model):
 			del total
 
 		self.__last_batch_size = config["train"]["batch_size"]
+		
+		if self.rescale:
+			if self.means == None:
+				self.means, self.stddevs = LSTMDataset.get_scale_params(train_data)
+			train_data = LSTMDataset.rescale(train_data, self.means, self.stddevs)
 
 		dataset = LSTMDataset(train_data, labels)
 		dataloader = DataLoader(dataset, batch_size=self.__last_batch_size,
@@ -96,6 +106,8 @@ class LSTM(Model):
 		self.lstm.to(self.device)
 
 	def score(self, test_data, batch_size=None, use_gpu=True):
+		if self.rescale:
+			test_data = LSTMDataset.rescale(test_data, self.means, self.stddevs)
 		if Model.is_concatenated(test_data):
 			test_data = Model.split(test_data)
 
@@ -154,6 +166,27 @@ class LSTMDataset(Dataset):
 	
 	def __len__(self):
 		return len(self.data)
+
+	@staticmethod
+	def get_scale_params(data):
+		if Model.is_concatenated(data):
+			return (
+				np.mean(data[0], axis=0),
+				np.std(data[0], axis=0)
+			)
+		else:
+			d, _ = Model.concatenated(data)
+			return (
+				np.mean(d, axis=0),
+				np.std(d, axis=0)
+			)
+
+	@staticmethod
+	def rescale(data, means, stddevs):
+		if Model.is_concatenated(data):
+			return ((data[0] - means) / stddevs, data[1])
+		else:
+			return [sequence - means / stddevs for sequence in data]
 
 def LSTMCollate(samples):
 	sequences, labels = zip(*samples)

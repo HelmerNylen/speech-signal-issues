@@ -4,15 +4,16 @@
 			"n_components": 3,
 			"n_mix": 2,
 			"covariance_type": "diag",
-			"init_params": "st"
+			"init_params": "stwmc"
 		},
 		"train": {
-			"weight_rand_init": 0.15,
-			"mean_rand_init": 1.5,
-			"covar_rand_init": 15.0,
+			"weight_rand_init": 0.1,
+			"mean_rand_init": 0.1,
+			"covar_rand_init": 0.1,
 			"n_iter": 4,
 			"verbose": true,
-			"tol": 0
+			"tol": 0,
+			"rescale_samples": true
 		}
 	},
 	"LSTM": {
@@ -26,7 +27,8 @@
 			"batch_size": 256,
 			"n_iter": 4,
 			"verbose": true,
-			"force_cpu": false
+			"force_cpu": false,
+			"rescale_samples": true
 		}
 	}
 }

@@ -103,15 +103,11 @@ class Classifier:
 		start = time()
 
 		# Classify each sample
-		try:
-			predicted_class, noise_types = self.label(features, silent=silent)
-		# TODO: Remove, just throw the error
-		except BaseException as e:
-			print(e)
-			return res
+		predicted_class, noise_types = self.label(features, silent=silent) #pylint: disable=unbalanced-tuple-unpacking
+
 		# TODO: onödig assert om man rensar upp lite
 		if not sum(a == b for a, b in zip(noise_types, self.noise_types)) == len(self.noise_types):
-			raise ValueError(f"Different ordering of noise types in multiclass model and classifier")
+			raise ValueError("Different ordering of noise types in multiclass model and classifier")
 
 		for i, true_type in enumerate(self.noise_types):
 			res[true_type, ConfusionTable.TOTAL] = labels[:, i].sum()
@@ -154,7 +150,7 @@ class Classifier:
 			# Assume iterable
 			for classifier in c:
 				if not isinstance(classifier, Classifier):
-					raise ValueError(f"Non-classifier in input")
+					raise ValueError("Non-classifier in input")
 				else:
 					yield classifier
 

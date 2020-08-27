@@ -49,15 +49,16 @@ def extract_features(filenames: list, features: list, feature_args: list,
 	if len(features) != len(feature_args):
 		raise ValueError(f"Number of features ({len(features)} does not match number of provided feature args ({len(feature_args)})")
 
-	cache_filename = _filename(filenames, features, feature_args)
-	if cache and os.path.exists(cache_filename):
-		from pickle import load
-		with open(cache_filename, "rb") as f:
-			cached_tuple, feature_vals = load(f)
-		if (cached_tuple[0] == filenames).all() and cached_tuple[1:] == (features, feature_args):
-			return feature_vals
-		else:
-			del cached_tuple, feature_vals
+	if cache:
+		cache_filename = _filename(filenames, features, feature_args)
+		if os.path.exists(cache_filename):
+			from pickle import load
+			with open(cache_filename, "rb") as f:
+				cached_tuple, feature_vals = load(f)
+			if (cached_tuple[0] == filenames).all() and cached_tuple[1:] == (features, feature_args):
+				return feature_vals
+			else:
+				del cached_tuple, feature_vals
 
 	available_features = get_available_features()
 	feature_vals = []
