@@ -115,6 +115,29 @@ def create(args):
 		print(f"\t{noise_type}: {split} training files and {len(files) - split} testing files")
 	del noise
 
+	# If a noise class spec, import degradations from noise class file
+	if spec.get("useNoiseClasses", False):
+		sys.path.append(os.path.join(PROJECT_ROOT, "noise_classes"))
+		from noise_class import NoiseClass #pylint: disable=import-error
+
+		if not os.path.exists(args.noise_classes):
+			print(f"Noise class file {args.noise_classes} does not exist")
+			sys.exit(1)
+		noise_classes = NoiseClass.from_file(args.noise_classes)
+
+		spec["types"] = []
+		spec["labels"] = []
+		for nc_id, weight in spec["weights"].items():
+			if nc_id not in noise_classes:
+				print(f"Noise class {nc_id} not specified in {args.noise_classes}")
+				sys.exit(1)
+			spec["types"].append({
+				"label": nc_id,
+				"weight": weight,
+				"degradations": noise_classes[nc_id].degradations
+			})
+			spec["labels"].append(nc_id)
+
 	# Verify degradation type labels
 	for i, _type in enumerate(spec["types"]):
 		for label in _labels(_type):
@@ -131,21 +154,25 @@ def create(args):
 
 
 	# Assign degradation types indexes to speech files
-	# TODO: testa
 	import numpy as np
-	n_types = len(spec["types"])
 	weights = [t.get("weight", 1) for t in spec["types"]]
 	weight_sum = sum(weights)
 
-	types_train = [i for i, t in enumerate(spec["types"]) for _ in range(int(t["weight"] * len(speech_train) // weight_sum))]
+	types_train = [i for i, t in enumerate(spec["types"]) for _ in range(int(t.get("weight", 1) * len(speech_train) // weight_sum))]
 	types_train = types_train + random.choices(range(len(spec["types"])), weights, k=len(speech_train) - len(types_train))
-	print(np.bincount(types_train) / np.bincount(types_train)[0])
 	random.shuffle(types_train)
+	bincount = np.bincount(types_train)
+	print("Training samples:")
+	for i, t in enumerate(spec["types"]):
+		print(f"\t{bincount[i]} {', '.join(_labels(t))}")
 
-	types_test = [i for i, t in enumerate(spec["types"]) for _ in range(int(t["weight"] * len(speech_test) // weight_sum))]
+	types_test = [i for i, t in enumerate(spec["types"]) for _ in range(int(t.get("weight", 1) * len(speech_test) // weight_sum))]
 	types_test = types_test + random.choices(range(len(spec["types"])), weights, k=len(speech_test) - len(types_test))
-	print(np.bincount(types_test) / np.bincount(types_test)[0])
 	random.shuffle(types_test)
+	bincount = np.bincount(types_test)
+	print("Testing samples:")
+	for i, t in enumerate(spec["types"]):
+		print(f"\t{bincount[i]} {', '.join(_labels(t))}")
 
 	# Setup Matlab
 	print("Setting up Matlab ...", end="", flush=True)
@@ -174,6 +201,7 @@ def create(args):
 			print(f"Removed {c} file{'s' if c != 1 else ''}")
 		else:
 			print("Dataset", spec["name"], "already exists", file=sys.stderr)
+			print("Run with the --overwrite flag if you wish to overwrite the dataset")
 			sys.exit(1)
 	else:
 		for folder in (dataset_folder, output_train, output_test):
@@ -334,6 +362,8 @@ if __name__ == "__main__":
 			default=os.path.join(PROJECT_ROOT, "datasets"), metavar="FOLDER")
 	subparser.add_argument("--adt", help="Path to Audio Degradation Toolbox root folder (default: %(default)s)",
 			default=os.path.join(PROJECT_ROOT, "degradation", "adt"), metavar="FOLDER")
+	subparser.add_argument("--noise-classes", help="Path to noise class definitions (default: %(default)s)",
+			default=os.path.join(PROJECT_ROOT, "noise_classes", "noise_classes.json"), metavar="myfile.json")
 	subparser.add_argument("--no-cache", help="Disable caching noise files. Increases runtime but decreases memory usage.", action="store_true")
 	
 	subparser = subparsers.add_parser("prepare", help="Prepare the audio files in the dataset (convert from nist to wav, stereo to mono etc.)")

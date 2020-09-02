@@ -55,7 +55,7 @@ def extract_features(filenames: list, features: list, feature_args: list,
 			from pickle import load
 			with open(cache_filename, "rb") as f:
 				cached_tuple, feature_vals = load(f)
-			if (cached_tuple[0] == filenames).all() and cached_tuple[1:] == (features, feature_args):
+			if (np.array(cached_tuple[0]) == filenames).all() and cached_tuple[1:] == (features, feature_args):
 				return feature_vals
 			else:
 				del cached_tuple, feature_vals

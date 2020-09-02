@@ -1,5 +1,5 @@
 {
-	"name":		"JSON-Test",
+	"name":		"BasicDataset",
 	"train": 	0.75,
 	"test":		0.25,
 	"labels":	["none", "mute", "clipping", "add-white", "add-aircon", "add-hum"],

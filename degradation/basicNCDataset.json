@@ -1,0 +1,15 @@
+{
+	"name":		"BasicNCDataset",
+	"train": 	0.75,
+	"test":		0.25,
+	"useNoiseClasses":	true,
+	"weights": {
+		"pad-norm":			1,
+		"add-white":		0.34,
+		"add-aircon":		0.33,
+		"add-hum":			0.33,
+		"clipping-hard":	0.5,
+		"clipping-soft":	0.5,
+		"mute":				1
+	}
+}

@@ -37,6 +37,7 @@ class Classifier:
 		
 		If silent is set, stdout is redirected to stderr and some informational output is removed"""
 		
+		# TODO: gå igenom och byt ut så att man bara skickar in feats, inte [feats]
 		if len(features) > 1: # Multiple feature types
 			raise ValueError(f"Multiple types of features not currently supported (got {len(features)})")
 		else:
@@ -65,10 +66,8 @@ class Classifier:
 	def label(self, features, return_scores=False, silent=False):
 		"""Label a set of feature sequences. Use test() to test performance on a dataset."""
 
-		if "score" in self.config:
-			kwargs = self.config["score"]
-		else:
-			kwargs = dict()
+		kwargs = self.config.get("score", dict())
+		kwargs = dict() if kwargs is None else kwargs
 
 		with redirect_stdout(sys.stderr if silent else sys.stdout):
 			if self.model_type.MULTICLASS:

@@ -1,0 +1,225 @@
+[{
+	"id": "pad-norm",
+	"name": "Padded and Normalized",
+	"info": {
+		"description": "Pseudo-class for non-corrupted recordings which have been padded and normalized."
+	},
+	"degradations": [
+		{
+			"name": "pad",
+			"before": 1,
+			"after": 1
+		}, {
+			"name": "normalize"
+		}
+	]
+}, {
+	"id": "norm",
+	"name": "Normalized",
+	"info": {
+		"description": "Pseudo-class for non-corrupted recordings which have been normalized."
+	},
+	"degradations": [
+		{
+			"name": "normalize"
+		}
+	]
+}, {
+	"id": "add-white",
+	"name": "White Noise",
+	"info": {
+		"description": "A description of the problem.",
+		"cause": "An explanation of what causes the problem.",
+		"solution": "How to solve the problem."
+	},
+	"degradations": [
+		{
+			"name": "pad",
+			"before": 1,
+			"after": 1
+		},{
+			"name": "addNoise",
+			"noiseColor": "white",
+			"snrRatio": 40,
+			"normalizeOutputAudio": true
+		}
+	],
+	"classifiers": [
+		{
+			"type": "GMMHMM",
+			"parameters": "default",
+			"train": "default",
+			"feature": "mfcc_kaldi",
+			"feature_settings": {}
+		}
+	]
+}, {
+	"id": "add-aircon",
+	"name": "Air-conditioning",
+	"info": {
+		"description": "A description of the problem.",
+		"cause": "An explanation of what causes the problem.",
+		"solution": "How to solve the problem."
+	},
+	"degradations": [
+		{
+			"name": "pad",
+			"before": 1,
+			"after": 1
+		},{
+			"name": "addSound",
+			"addSoundFile": {"randomNoiseFile": "aircon"},
+			"addSoundFileStart": "random",
+			"snrRatio": 40,
+			"normalizeOutputAudio": true
+		}
+	],
+	"classifiers": [
+		{
+			"type": "GMMHMM",
+			"parameters": "default",
+			"train": "default",
+			"feature": "mfcc_kaldi",
+			"feature_settings": {}
+		}
+	]
+}, {
+	"id": "add-hum",
+	"name": "Electric Hum",
+	"info": {
+		"description": "A description of the problem.",
+		"cause": "An explanation of what causes the problem.",
+		"solution": "How to solve the problem."
+	},
+	"degradations": [
+		{
+			"name": "pad",
+			"before": 1,
+			"after": 1
+		},{
+			"name": "addSound",
+			"addSoundFile": {"randomNoiseFile": "electric-hum"},
+			"addSoundFileStart": "random",
+			"snrRatio": 40,
+			"normalizeOutputAudio": true
+		}
+	],
+	"classifiers": [
+		{
+			"weight": 1,
+			"bootstrap": true,
+			"type": "GMMHMM",
+			"parameters": "default",
+			"train": "default",
+			"feature": "mfcc_kaldi",
+			"feature_settings": {}
+		},
+		{
+			"weight": 1,
+			"bootstrap": true,
+			"type": "GMMHMM",
+			"parameters": "default",
+			"train": "default",
+			"feature": "mfcc_kaldi",
+			"feature_settings": {}
+		},
+		{
+			"weight": 1,
+			"bootstrap": true,
+			"type": "GMMHMM",
+			"parameters": "default",
+			"train": "default",
+			"feature": "mfcc_kaldi",
+			"feature_settings": {}
+		}
+	],
+	"classification_settings": {
+		"average": "label"
+	}
+}, {
+	"id": "clipping-hard",
+	"name": "Clipping (Hard)",
+	"info": {
+		"description": "A description of the problem.",
+		"cause": "An explanation of what causes the problem.",
+		"solution": "How to solve the problem."
+	},
+	"degradations": [
+		{
+			"name": "applyClippingAlternative",
+			"percentOfSamples": 20
+		}, {
+			"name": "pad",
+			"before": 1,
+			"after": 1
+		}
+	],
+	"classifiers": [
+		{
+			"type": "GMMHMM",
+			"parameters": "default",
+			"train": "default",
+			"feature": "mfcc_kaldi",
+			"feature_settings": {}
+		}
+	]
+}, {
+	"id": "clipping-soft",
+	"name": "Clipping (Soft)",
+	"info": {
+		"description": "A description of the problem.",
+		"cause": "An explanation of what causes the problem.",
+		"solution": "How to solve the problem."
+	},
+	"degradations": [
+		{
+			"name": "applySoftClipping",
+			"percentOfSamples": 20
+		}, {
+			"name": "pad",
+			"before": 1,
+			"after": 1
+		}
+	],
+	"classifiers": [
+		{
+			"type": "GMMHMM",
+			"parameters": "default",
+			"train": "default",
+			"feature": "mfcc_kaldi",
+			"feature_settings": {}
+		}
+	]
+}, {
+	"id": "mute",
+	"name": "Random Muting",
+	"info": {
+		"description": "A description of the problem.",
+		"cause": "An explanation of what causes the problem.",
+		"solution": "How to solve the problem."
+	},
+	"degradations": [
+		{
+			"name": "applyMute",
+			"mutePercent": 20,
+			"muteLengthMin": 0.1,
+			"muteLengthMax": 0.75,
+			"mutePauseMin": 0.05
+		}, {
+			"name": "pad",
+			"before": 1,
+			"after": 1
+		}, {
+			"name": "normalize"
+		}
+	],
+	"classifiers": [
+		{
+			"type": "GMMHMM",
+			"parameters": "default",
+			"train": "default",
+			"feature": "mfcc_kaldi",
+			"feature_settings": {}
+		}
+	]
+}]

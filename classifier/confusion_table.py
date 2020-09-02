@@ -22,10 +22,10 @@ class ConfusionTable:
 			)
 		elif isinstance(true_labels, str):
 			first = np.argwhere(self.true_labels == true_labels)[0][0]
-		elif true_labels is None:
+		elif isinstance(true_labels, int) or true_labels is None:
 			first = true_labels
 		else:
-			raise IndexError(f"Only strings or string slices are allowed (got: {repr(true_labels)})")
+			raise IndexError(f"Only strings, string slices or ints are allowed (got: {repr(true_labels)})")
 
 		if isinstance(confused_labels, slice):
 			second = slice(
@@ -35,10 +35,10 @@ class ConfusionTable:
 			)
 		elif isinstance(confused_labels, str):
 			second = np.argwhere(self.confused_labels == confused_labels)[0][0]
-		elif confused_labels is None or confused_labels is ConfusionTable.TOTAL:
+		elif isinstance(confused_labels, int) or confused_labels is None or confused_labels is ConfusionTable.TOTAL:
 			second = confused_labels
 		else:
-			raise IndexError(f"Only strings, string slices or Ellipsis are allowed (got: {repr(confused_labels)})")
+			raise IndexError(f"Only strings, string slices, ints or Ellipsis are allowed (got: {repr(confused_labels)})")
 		
 		return first, second
 
