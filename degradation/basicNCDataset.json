@@ -5,9 +5,10 @@
 	"useNoiseClasses":	true,
 	"weights": {
 		"pad-norm":			1,
-		"add-white":		0.34,
+		"add-white":		0.33,
 		"add-aircon":		0.33,
 		"add-hum":			0.33,
+		"add-infra":		0.33,
 		"clipping-hard":	0.5,
 		"clipping-soft":	0.5,
 		"mute":				1

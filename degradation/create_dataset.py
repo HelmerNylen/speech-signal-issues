@@ -244,11 +244,12 @@ def create(args):
 			m_eng.save(os.path.join(output_t, "degradations.mat"), "speech_files", "degradations", "output_files", nargout=0)
 			
 		except matlab.engine.MatlabExecutionError as e:
-			print(e, file=sys.stderr)
-			print("A Matlab error occurred", file=sys.stderr)
-			print("Launching Matlab desktop so you may debug. Press enter to exit.", end="", flush=True, file=sys.stderr)
-			m_eng.desktop(nargout=0)
-			input()
+			if args.debug:
+				print(e, file=sys.stderr)
+				print("A Matlab error occurred", file=sys.stderr)
+				print("Launching Matlab desktop so you may debug. Press enter to exit.", end="", flush=True, file=sys.stderr)
+				m_eng.desktop(nargout=0)
+				input()
 			raise e
 		
 		# Save the labels.csv file
@@ -365,6 +366,7 @@ if __name__ == "__main__":
 	subparser.add_argument("--noise-classes", help="Path to noise class definitions (default: %(default)s)",
 			default=os.path.join(PROJECT_ROOT, "noise_classes", "noise_classes.json"), metavar="myfile.json")
 	subparser.add_argument("--no-cache", help="Disable caching noise files. Increases runtime but decreases memory usage.", action="store_true")
+	subparser.add_argument("--debug", help="Launch Matlab on errors to help with debugging", action="store_true")
 	
 	subparser = subparsers.add_parser("prepare", help="Prepare the audio files in the dataset (convert from nist to wav, stereo to mono etc.)")
 	subparser.set_defaults(func=prepare)

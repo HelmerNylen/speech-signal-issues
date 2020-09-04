@@ -7,8 +7,30 @@ DEGRADATIONS = (
 	"", "pad", "addSound", "applyImpulseResponse", "adaptiveEqualizer", "applyMfccMeanAdaption",
 	"normalize", "applyMute", "applySoftClipping", "addNoise", "applyAliasing", "applyClipping",
 	"applyClippingAlternative", "applyDelay", "applyDynamicRangeCompression", "applyHarmonicDistortion",
-	"applyHighpassFilter", "applyLowpassFilter", "applySpeedup", "applyWowResampling"
+	"applyHighpassFilter", "applyLowpassFilter", "applySpeedup", "applyWowResampling", "addInfrasound"
 )
+
+def _parse(value, noise_files):
+	if isinstance(value, dict):
+		if tuple(value.keys()) == ("randomNoiseFile",):
+			folder, files = noise_files[value["randomNoiseFile"]]
+			return os.path.join(folder, choice(files))
+		elif tuple(value.keys()) == ("randomChoice",):
+			return choice(value["randomChoice"])
+		elif tuple(value.keys()) == ("randomRange",):
+			low, high = value["randomRange"]
+			return uniform(low, high)
+		elif tuple(value.keys()) == ("randomRangeInt",):
+			low, high = value["randomRangeInt"]
+			return randint(low, high)
+		else:
+			raise ValueError("Unknown replacement " + str(value))
+	elif isinstance(value, int):
+		return float(value)
+	elif isinstance(value, list):
+		return [_parse(v, noise_files) for v in value]
+	else:
+		return value
 
 def setup_matlab_degradations(speech_files: list, degradations_by_file: list,
 		noise_files: dict, m_eng: MatlabEngine, workspace_var: str="degradations") -> str:
@@ -34,22 +56,7 @@ def setup_matlab_degradations(speech_files: list, degradations_by_file: list,
 			
 			for key, value in degradation.items():
 				if key == "name": continue
-				if isinstance(value, dict):
-					if tuple(value.keys()) == ("randomNoiseFile",):
-						folder, files = noise_files[value["randomNoiseFile"]]
-						params[key] = os.path.join(folder, choice(files))
-					elif tuple(value.keys()) == ("randomChoice",):
-						params[key] = choice(value["randomChoice"])
-					elif tuple(value.keys()) == ("randomRange",):
-						low, high = value["randomRange"]
-						params[key] = uniform(low, high)
-					elif tuple(value.keys()) == ("randomRangeInt",):
-						low, high = value["randomRangeInt"]
-						params[key] = randint(low, high)
-					else:
-						raise ValueError("Unknown replacement " + str(value))
-				else:
-					params[key] = float(value) if isinstance(value, int) else value
+				params[key] = _parse(value, noise_files)
 			
 			if len(params) == 0:
 				params = ""
