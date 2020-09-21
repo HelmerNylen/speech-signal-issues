@@ -29,30 +29,24 @@ class Classifier:
 			# Create multiple models for classification, each having knowledge of its own noise type
 			self.models = tuple(model_type(config=self.config) for noise_type in noise_types)
 	
-	def train(self, features, labels, models_folder=None, silent=False):
+	def train(self, features, index, labels, models_folder=None, silent=False):
 		"""Train the classifier's model for one epoch.
 		
 		If models_folder is specified and the model type is not multi-class,
 		an intermediate version is saved during training to prevent loss of progress in case of an error
 		
 		If silent is set, stdout is redirected to stderr and some informational output is removed"""
-		
-		# TODO: gå igenom och byt ut så att man bara skickar in feats, inte [feats]
-		if len(features) > 1: # Multiple feature types
-			raise ValueError(f"Multiple types of features not currently supported (got {len(features)})")
-		else:
-			features = features[0]
 
 		if self.model_type.MULTICLASS:
 			with redirect_stdout(sys.stderr if silent else sys.stdout):
-				self.model.train(features, labels, config=self.config)
+				self.model.train(features, index, labels, config=self.config)
 		else:
 			for noise_index, model in enumerate(self.models):
 				if not silent:
 					print(f"Training {self.noise_types[noise_index]} {model.__class__.__name__} model")
 
 				with redirect_stdout(sys.stderr if silent else sys.stdout):
-					model.train(features, labels[:, noise_index], config=self.config)
+					model.train(features, index, labels[:, noise_index], config=self.config)
 				
 				if models_folder is not None:
 					if not silent:
@@ -63,7 +57,7 @@ class Classifier:
 				print("Removing intermediate file")
 			os.remove(os.path.join(models_folder, f"intermediate_{self.model_type.__name__}.classifier"))
 	
-	def label(self, features, return_scores=False, silent=False):
+	def label(self, features, index, return_scores=False, silent=False):
 		"""Label a set of feature sequences. Use test() to test performance on a dataset."""
 
 		kwargs = self.config.get("score", dict())
@@ -71,14 +65,14 @@ class Classifier:
 
 		with redirect_stdout(sys.stderr if silent else sys.stdout):
 			if self.model_type.MULTICLASS:
-				scores = self.model.score(features, **kwargs)
+				scores = self.model.score(features, index, **kwargs)
 				predicted_class = np.argmax(scores, axis=1)
 				noise_types = np.array(self.model.get_noise_types())
 
 			else:
 				scores = []
 				for model in self.models:
-					scores.append(model.score(features, **kwargs))
+					scores.append(model.score(features, index, **kwargs))
 				scores = np.column_stack(scores)
 				predicted_class = np.argmax(scores, axis=1)
 				noise_types = np.array(self.noise_types)
@@ -88,21 +82,16 @@ class Classifier:
 		else:
 			return predicted_class, noise_types
 			
-	def test(self, features, labels, silent=False) -> ConfusionTable:
+	def test(self, features, index, labels, silent=False) -> ConfusionTable:
 		"""Test the classifier's performance on a dataset.
 		
 		Returns a confusion table."""
-		
-		if len(features) > 1: # Multiple feature types
-			raise ValueError(f"Multiple types of features not currently supported (got {len(features)})")
-		else:
-			features = features[0]
 
 		res = ConfusionTable(self.noise_types)
 		start = time()
 
 		# Classify each sample
-		predicted_class, noise_types = self.label(features, silent=silent) #pylint: disable=unbalanced-tuple-unpacking
+		predicted_class, noise_types = self.label(features, index, silent=silent) #pylint: disable=unbalanced-tuple-unpacking
 
 		# TODO: onödig assert om man rensar upp lite
 		if not sum(a == b for a, b in zip(noise_types, self.noise_types)) == len(self.noise_types):

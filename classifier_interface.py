@@ -15,7 +15,8 @@ from features import read_dataset, extract_features
 def train(args):
 	from classifier.model_gmmhmm import GMMHMM
 	from classifier.model_lstm import LSTM
-	supported_classifiers = [LSTM, GMMHMM]
+	from classifier.model_gmm import GMM
+	supported_classifiers = [LSTM, GMMHMM, GMM]
 
 	# Defaults for data and models folders
 	if not os.path.exists(args.models):
@@ -87,7 +88,7 @@ def train(args):
 	# Get features
 	with redirect_stdout(sys.stderr if args.silent else sys.stdout):
 		filenames, classes, labels = read_dataset(args.dataset_name, "train")
-		feats = extract_features(filenames, ["mfcc_kaldi"], [{}], cache=not args.recompute)
+		feats, index = extract_features(filenames, "mfcc_kaldi", {}, cache=not args.recompute)
 
 	# Create classifiers (unless previously read from disk)
 	if args.read is None:
@@ -100,7 +101,7 @@ def train(args):
 	for epoch in range(1, args.epochs + 1):
 		for i, classifier in enumerate(classifiers):
 			# Train
-			classifier.train(feats, labels, silent=args.silent, models_folder=args.models)
+			classifier.train(feats, index, labels, silent=args.silent, models_folder=args.models)
 			# Save classifier
 			if isinstance(args.write, str):
 				classifier.save_to_file(os.path.join(
@@ -131,7 +132,8 @@ def train(args):
 def test(args):
 	from classifier.model_gmmhmm import GMMHMM
 	from classifier.model_lstm import LSTM
-	supported_classifiers = [LSTM, GMMHMM]
+	from classifier.model_gmm import GMM
+	supported_classifiers = [LSTM, GMMHMM, GMM]
 
 	# Defaults for data and models folders
 	if not os.path.exists(args.models):
@@ -166,7 +168,7 @@ def test(args):
 	# Get features
 	with redirect_stdout(sys.stderr if args.silent else sys.stdout):
 		filenames, _, labels = read_dataset(args.dataset_name, "test")
-		feats = extract_features(filenames, ["mfcc_kaldi"], [{}], cache=not args.recompute)
+		feats, index = extract_features(filenames, "mfcc_kaldi", {}, cache=not args.recompute)
 
 	if not args.silent:
 		print("Calculating scores ...", flush=True)
@@ -214,7 +216,7 @@ def _list(args):
 		print(f"No classifiers in {args.models}")
 
 if __name__ == "__main__":
-	supported_types = ["LSTM", "GMMHMM"]
+	supported_types = ["LSTM", "GMMHMM", "GMM"]
 	parser = argparse.ArgumentParser(
 		prog="classifier.py",
 		description="Train or test a classifier. Supported types: " + ", ".join(supported_types)

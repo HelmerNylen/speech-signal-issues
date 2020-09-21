@@ -30,5 +30,18 @@
 			"force_cpu": false,
 			"rescale_samples": true
 		}
+	},
+	"GMM": {
+		"parameters": {
+			"n_components": 1,
+			"n_init": 2,
+			"max_iter": 100,
+			"tol": 0,
+			"covariance_type": "diag"
+		},
+		"train": {
+			"verbose": true,
+			"rescale_samples": true
+		}
 	}
 }

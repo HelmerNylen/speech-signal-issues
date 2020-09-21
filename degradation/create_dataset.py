@@ -347,10 +347,8 @@ if __name__ == "__main__":
 	subparser.set_defaults(func=create)
 
 	subparser.add_argument("specification", help="JSON file with a dataset specification", metavar="myfile.json")
-	# TODO: Ability to override these on the command line? (Why?)
+	# TODO: Ability to override these on the command line?
 	#subparser.add_argument("-n", "--name", help="Override name of the new dataset", metavar="MyDataset", default=None)
-	#subparser.add_argument("--train", help="Override ratio/number of files in training set", default=None, type=float)
-	#subparser.add_argument("--test", help="Override ratio/number of files in testing set", default=None, type=float)
 	# TODO: maybe add ability to filter which labels should be used in the dataset? (Label groups?)
 
 	# TODO: implement?

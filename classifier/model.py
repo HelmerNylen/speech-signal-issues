@@ -12,9 +12,9 @@ class Model():
 	def get_noise_types(self):
 		raise NotImplementedError()
 	
-	def train(self, train_data, labels, config: dict=None):
+	def train(self, train_data, index, labels, config: dict=None):
 		raise NotImplementedError()
-	def score(self, test_data):
+	def score(self, test_data, index):
 		raise NotImplementedError()
 
 	@staticmethod

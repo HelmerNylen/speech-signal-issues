@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 from hmmlearn.base import ConvergenceMonitor
 from hmmlearn import hmm
 from classifier.model import Model
@@ -27,6 +28,9 @@ class GMMHMM(Model):
 			config["train"].get("covar_min_init", 0),
 		)
 		self.rescale = config["train"].get("rescale_samples", False)
+		if self.rescale:
+			self.means = None
+			self.stddevs = None
 	
 	def __rand_init(self, train_data):
 		self.gmm_hmm._init(*train_data)
@@ -65,10 +69,10 @@ class GMMHMM(Model):
 		#	print("Final", attr + ":", arr.shape, "from", np.min(arr), "to", np.max(arr))
 		#	print(arr)
 
-	def train(self, train_data, labels, config=None):
+	def train(self, train_data, index, labels, config=None):
 		if Model.is_concatenated(train_data):
 			train_data = Model.split(*train_data)
-		train_data = [d for d, l in zip(train_data, labels) if l]
+		train_data = [d for d, l in zip(train_data, labels[index]) if l]
 		train_data = Model.concatenated(train_data)
 
 		if self.rescale:
@@ -83,7 +87,7 @@ class GMMHMM(Model):
 		self.gmm_hmm.fit(train_data[0], lengths=train_data[1])
 		self.iepoch += 1
 	
-	def score(self, test_data):
+	def score(self, test_data, index):
 		did_warn = False
 		def degenerateWarningFilter(record):
 			if record.getMessage() != "Degenerate mixture covariance":
@@ -99,18 +103,35 @@ class GMMHMM(Model):
 		if Model.is_concatenated(test_data):
 			if self.rescale:
 				test_data = ((test_data[0] - self.means) / self.stddevs, test_data[1])
-			res = np.zeros(len(test_data[1]))
+			res = np.zeros(max(index) + 1)
+			lengths = np.zeros(res.shape[0])
 			ptr = 0
 			for i, l in enumerate(test_data[1]):
 				sequence = test_data[0][ptr:ptr + l, :]
-				res[i] = self.gmm_hmm.score(sequence)
+				# TODO: Borde score verkligen gångras med längden? Borde man istället labela varje sekvens och sen rösta?
+				res[index[i]] += self.gmm_hmm.score(sequence) * l
+				lengths[index[i]] += l
 				ptr += l
+
 		else:
+			res = np.zeros(max(index) + 1)
+			lengths = np.zeros(res.shape[0])
 			if self.rescale:
-				res = np.array([self.gmm_hmm.score((sequence - self.means) / self.stddevs) for sequence in test_data])
+				for i, sequence in enumerate(test_data):
+					res[index[i]] += self.gmm_hmm.score((sequence - self.means) / self.stddevs) * sequence.shape[0]
+					lengths[index[i]] += sequence.shape[0]
 			else:
-				res = np.array([self.gmm_hmm.score(sequence) for sequence in test_data])
-		
+				for i, sequence in enumerate(test_data):
+					res[index[i]] += self.gmm_hmm.score(sequence) * sequence.shape[0]
+					lengths[index[i]] += sequence.shape[0]
+
+		mask = lengths != 0
+		if not mask.all():
+			s = (~mask).sum()
+			warnings.warn(f"Attempting to label {s} empty feature sequence{'' if s == 1 else 's'}")
+
+		res[mask] = res[mask] / lengths[mask]
+
 		_log.removeFilter(degenerateWarningFilter)
 		if did_warn:
 			_log.warning("Degenerate mixture covariance")

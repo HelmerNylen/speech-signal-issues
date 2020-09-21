@@ -50,7 +50,14 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "mfcc_kaldi",
-			"feature_settings": {}
+			"feature_settings": {},
+			"vad": {
+				"frame_length": 20,
+				"aggressiveness": 2,
+				"inverse": true,
+				"min_length": 100,
+				"smooth_n": 7
+			}
 		}
 	]
 }, {
@@ -80,7 +87,14 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "mfcc_kaldi",
-			"feature_settings": {}
+			"feature_settings": {},
+			"vad": {
+				"frame_length": 20,
+				"aggressiveness": 2,
+				"inverse": true,
+				"min_length": 100,
+				"smooth_n": 7
+			}
 		}
 	]
 }, {
@@ -112,7 +126,14 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "mfcc_kaldi",
-			"feature_settings": {}
+			"feature_settings": {},
+			"vad": {
+				"frame_length": 20,
+				"aggressiveness": 2,
+				"inverse": true,
+				"min_length": 100,
+				"smooth_n": 7
+			}
 		},
 		{
 			"weight": 1,
@@ -121,7 +142,14 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "mfcc_kaldi",
-			"feature_settings": {}
+			"feature_settings": {},
+			"vad": {
+				"frame_length": 20,
+				"aggressiveness": 2,
+				"inverse": true,
+				"min_length": 100,
+				"smooth_n": 7
+			}
 		},
 		{
 			"weight": 1,
@@ -130,7 +158,14 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "mfcc_kaldi",
-			"feature_settings": {}
+			"feature_settings": {},
+			"vad": {
+				"frame_length": 20,
+				"aggressiveness": 2,
+				"inverse": true,
+				"min_length": 100,
+				"smooth_n": 7
+			}
 		}
 	],
 	"classification_settings": {
@@ -156,10 +191,13 @@
 	],
 	"classifiers": [
 		{
-			"type": "GMMHMM",
+			"type": "GMM",
 			"parameters": "default",
-			"train": "default",
-			"feature": "mfcc_kaldi",
+			"train": {
+				"verbose": true,
+				"rescale_samples": false
+			},
+			"feature": "histogram",
 			"feature_settings": {}
 		}
 	]
@@ -183,10 +221,13 @@
 	],
 	"classifiers": [
 		{
-			"type": "GMMHMM",
+			"type": "GMM",
 			"parameters": "default",
-			"train": "default",
-			"feature": "mfcc_kaldi",
+			"train": {
+				"verbose": true,
+				"rescale_samples": false
+			},
+			"feature": "histogram",
 			"feature_settings": {}
 		}
 	]
@@ -218,7 +259,37 @@
 			"type": "GMMHMM",
 			"parameters": "default",
 			"train": "default",
-			"feature": "mfcc_kaldi",
+			"feature": "rms_energy",
+			"feature_settings": {
+				"delta": true
+			}
+		}
+	]
+}, {
+	"id": "add-infra",
+	"name": "Infrasound Noise",
+	"info": {
+		"description": "A description of the problem.",
+		"cause": "An explanation of what causes the problem.",
+		"solution": "How to solve the problem."
+	},
+	"degradations": [
+		{
+			"name": "pad",
+			"before": 1,
+			"after": 1
+		},{
+			"name": "addInfrasound",
+			"sinusoidFreqs": [{"randomRange": [2, 12]}, {"randomRange": [8, 18]}],
+			"normalizeOutputAudio": true
+		}
+	],
+	"classifiers": [
+		{
+			"type": "GMMHMM",
+			"parameters": "default",
+			"train": "default",
+			"feature": "rms_energy_infra",
 			"feature_settings": {}
 		}
 	]

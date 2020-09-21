@@ -2,13 +2,13 @@ import os
 import csv
 import numpy as np
 from .mfcc import mfcc_kaldi, mfcc_librosa
-from .custom import acf
+from .custom import acf, histogram, rms_energy, rms_energy_infra
 from .utils import root_folder, concat_samples
 
-CACHE_SIZE = 10
+CACHE_SIZE = 20
 
 def get_available_features() -> tuple:
-	feats = (mfcc_kaldi, mfcc_librosa, acf)
+	feats = (mfcc_kaldi, mfcc_librosa, acf, histogram, rms_energy, rms_energy_infra)
 	return tuple(f.__name__ for f in feats), feats
 
 def read_dataset(name: str, partition: str, label: str=None) -> tuple:
@@ -36,56 +36,96 @@ def read_dataset(name: str, partition: str, label: str=None) -> tuple:
 		except ValueError as e:
 			raise ValueError(f"Label {label} not found in dataset {name}") from e
 
-def _filename(filenames: list, features: list, feature_args: list):
+def _filename(filenames: list, feature: str, feature_args: dict, vad: dict):
 	from pickle import dumps
 	from hashlib import sha256
-	obj = (tuple(filenames), tuple(features), tuple(sorted(tuple(d.items())) for d in feature_args))
+	obj = (tuple(filenames), feature, tuple(sorted(feature_args.items())), tuple() if vad is None else tuple(sorted(vad.items())))
 	_hash = sha256(dumps(obj)).hexdigest()
 	return os.path.join(root_folder(), "features", "cache", str(_hash) + ".features")
 
-def extract_features(filenames: list, features: list, feature_args: list,
-		concatenate: bool=False, cache: bool=True) -> list:
-
-	if len(features) != len(feature_args):
-		raise ValueError(f"Number of features ({len(features)} does not match number of provided feature args ({len(feature_args)})")
+def extract_features(filenames: list, feature: str, feature_args: dict, vad: dict=None,
+		concatenate: bool=False, cache: bool=True):
 
 	if cache:
-		cache_filename = _filename(filenames, features, feature_args)
+		# Lookup features in cache and return them if found
+		cache_filename = _filename(filenames, feature, feature_args, vad)
+
 		if os.path.exists(cache_filename):
 			from pickle import load
 			with open(cache_filename, "rb") as f:
-				cached_tuple, feature_vals = load(f)
-			if (np.array(cached_tuple[0]) == filenames).all() and cached_tuple[1:] == (features, feature_args):
-				return feature_vals
+				cached_tuple, feature_vals, index = load(f)
+			if (np.array(cached_tuple[0]) == filenames).all() and cached_tuple[1:] == (feature, feature_args, vad):
+				return feature_vals, index
 			else:
-				del cached_tuple, feature_vals
+				del cached_tuple, feature_vals, index
 
+	# Get feature function
 	available_features = get_available_features()
-	feature_vals = []
-	for feature_name, args in zip(features, feature_args):
-		if feature_name not in available_features[0]:
-			raise ValueError(f"Unrecognized feature {feature_name}")
-		feature_func = available_features[1][available_features[0].index(feature_name)]
+	if feature not in available_features[0]:
+		raise ValueError(f"Unrecognized feature {feature}")
+	feature_func = available_features[1][available_features[0].index(feature)]
 
-		feature_vals.append(feature_func(filenames, **args))
+	if vad is None or len(vad) == 0:
+		# Compute features on original files
+		index = np.arange(len(filenames))
+		feature_vals = feature_func(filenames, **feature_args)
+	else:
+		# Split files according to VAD output and perform feature extraction on each part
+		from .vad import analyze_gen, smooth, splitaudio, write_tempfiles, clean_tempdir
+		if "frame_length" not in vad or "aggressiveness" not in vad:
+			raise ValueError("Argument 'vad' must contain 'frame_length' and 'aggressiveness'")
+
+		gen = analyze_gen(filenames, vad["frame_length"], vad["aggressiveness"])
+		if "smooth_n" in vad:
+			gen = (
+				(audio, smooth(activity, n=vad["smooth_n"], threshold=vad.get("smooth_treshold")))
+					for audio, activity in gen)
+
+		# TODO: lite illa att detta i princip kopierar hela datamängden till disk igen
+		tempfiles = []
+		tempdir = None
+		for audio, activity in gen:
+			segments = splitaudio(audio, vad["frame_length"], activity, vad.get("inverse", False), vad.get("min_length", 0))
+			_tf, tempdir = write_tempfiles(segments, tempdir)
+			tempfiles.append(_tf)
+
+		index = np.array([i for i in range(len(tempfiles)) for j in range(len(tempfiles[i]))])
+
+		tempfiles = [t for l in tempfiles for t in l]
+		feature_vals = feature_func(tempfiles, **feature_args)
+		clean_tempdir(tempdir)
+		
+	empty = sum(np.prod(v.shape) == 0 for v in feature_vals if isinstance(v, np.ndarray))
+	if empty > 0:
+		raise ValueError(f"{empty} feature value{'' if empty == 1 else 's'} of dimension 0")
 	
 	if cache:
+		# Remove least recently used cache entries if needed
+		cache_files = next(os.walk(os.path.join(root_folder(), "features", "cache")))
+		cache_files = [os.path.join(cache_files[0], fn) for fn in cache_files[2] if fn.endswith(".features")]
+		cache_files = sorted(cache_files, key=lambda fn: os.stat(fn).st_atime, reverse=True)
+		if len(cache_files) > CACHE_SIZE - 1:
+			for fn in cache_files[CACHE_SIZE-1:]:
+				try:
+					os.remove(fn)
+				except OSError:
+					pass
+
 		from pickle import dump
 		with open(cache_filename, "wb") as f:
-			dump(((filenames, features, feature_args), feature_vals), f)
+			dump(((filenames, feature, feature_args, vad), feature_vals, index), f)
 
 	if concatenate:
-		for i in range(len(feature_vals)):
-			feature_vals[i] = concat_samples(feature_vals[i])
+		feature_vals = concat_samples(feature_vals)
 	
-	return feature_vals
+	return feature_vals, index
 
 # For compability with older classifiers
 def extract_dataset_features(name: str, partition: str, features: list, feature_args: list,
 		concatenate: bool=False, cache: bool=True) -> dict:
 
 	filenames, classes, labels = read_dataset(name, partition, None)
-	feature_vals = extract_features(filenames, features, feature_args, False, cache)
+	feature_vals, _ = [extract_features(filenames, f, f_a, concatenate=False, cache=cache) for f, f_a in zip(features, feature_args)]
 	res = dict()
 	for label in classes:
 		mask = labels[:, classes.index(label)]

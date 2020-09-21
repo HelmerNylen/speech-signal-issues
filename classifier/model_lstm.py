@@ -1,10 +1,12 @@
 import torch
+import warnings
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
 import numpy as np
 from .model import Model
 
+# TODO: träningen här är konstig, vore ev. bra att göra en binär version iom noise classes
 # pylint: disable=super-init-not-called,signature-differs,arguments-differ
 class LSTM(Model):
 	MULTICLASS = True
@@ -59,7 +61,9 @@ class LSTM(Model):
 	def get_noise_types(self):
 		return self.noise_types
 
-	def train(self, train_data, labels, config):
+	def train(self, train_data, index, labels, config):
+		if Model.is_concatenated(train_data):
+			train_data = Model.split(*train_data)
 		if self.lstm is None:
 			self.init_lstm(train_data[0].shape[1])
 		self.lstm.train()
@@ -84,16 +88,16 @@ class LSTM(Model):
 				self.means, self.stddevs = LSTMDataset.get_scale_params(train_data)
 			train_data = LSTMDataset.rescale(train_data, self.means, self.stddevs)
 
-		dataset = LSTMDataset(train_data, labels)
+		dataset = LSTMDataset(train_data, labels[index])
 		dataloader = DataLoader(dataset, batch_size=self.__last_batch_size,
 				shuffle=True, collate_fn=LSTMCollate, pin_memory=self.device != 'cpu')
 		for i in range(config["train"]["n_iter"]):
 			total_loss = 0
-			for sequences, labels in dataloader:
+			for sequences, _labels in dataloader:
 				self.optimizer.zero_grad()
 				
 				predictions = self.lstm(self.__push_packed_sequence(sequences))
-				loss = self.loss(predictions, labels.to(self.device))
+				loss = self.loss(predictions, _labels.to(self.device))
 				loss.backward()
 				self.optimizer.step()
 
@@ -105,7 +109,7 @@ class LSTM(Model):
 		self.device = 'cpu'
 		self.lstm.to(self.device)
 
-	def score(self, test_data, batch_size=None, use_gpu=True):
+	def score(self, test_data, index, batch_size=None, use_gpu=True):
 		if self.rescale:
 			test_data = LSTMDataset.rescale(test_data, self.means, self.stddevs)
 		if Model.is_concatenated(test_data):
@@ -118,20 +122,36 @@ class LSTM(Model):
 
 		batch_size = batch_size or self.__last_batch_size or 128
 		
-		dataset = LSTMDataset(test_data, np.zeros((len(test_data), 1)))
-		dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True,
+		# During testing we send in the index and sequence length instead of a label
+		dataset = LSTMDataset(test_data, list(zip(index, map(len, test_data))))
+		dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False,
 			collate_fn=LSTMCollate, pin_memory=self.device != 'cpu')
-		scores = []
+		scores = np.zeros((max(index) + 1, len(self.noise_types)))
+		lengths = np.zeros(scores.shape[0])
+
 		with torch.no_grad():
-			for sequences, _ in dataloader:
-				# Maybe want to do a sigmoid before returning scores
-				scores.extend(self.lstm(self.__push_packed_sequence(sequences))\
-					.cpu().numpy())
+			for sequences, idxs_and_lens in dataloader:
+				# TODO: vet inte om man borde ta en logsoftmax här, iom att loss functionen gör det
+				_scores = self.lstm(self.__push_packed_sequence(sequences))\
+					.cpu().numpy()
+
+				for score, idx, l in zip(_scores, idxs_and_lens[:, 0], idxs_and_lens[:, 1]):
+					# TODO: Borde score verkligen gångras med längden?
+					scores[int(idx)] += score * int(l)
+					lengths[int(idx)] += int(l)
+
+
+		mask = lengths != 0
+		if not mask.all():
+			s = (~mask).sum()
+			warnings.warn(f"Attempting to label {s} empty feature sequence{'' if s == 1 else 's'}")
+
+		scores[mask, :] = scores[mask, :] / lengths[mask, None]
 
 		self.device = 'cpu'
 		self.lstm.to(self.device)
 
-		return np.array(scores)
+		return scores
 
 class LSTMModule(nn.Module):
 	def __init__(self, input_dim, hidden_dim, output_dim, num_layers, dropout):
@@ -152,7 +172,6 @@ class LSTMModule(nn.Module):
 		#x = self.logsoftmax(x)
 		return x
 
-# TODO: kan nog byta till torch.utils.data.TensorDataset eftersom extrafunktionaliteten är borttagen
 class LSTMDataset(Dataset):
 	def __init__(self, data, labels):
 		# TODO: allow concatenated sequences
@@ -191,5 +210,5 @@ class LSTMDataset(Dataset):
 def LSTMCollate(samples):
 	sequences, labels = zip(*samples)
 	sequences = pack_sequence([torch.from_numpy(s) for s in sequences], enforce_sorted=False)
-	labels = torch.tensor(labels, dtype=torch.float32) # Bool may be available on newer pytorch versions
+	labels = torch.tensor(labels, dtype=torch.float32)
 	return sequences, labels
