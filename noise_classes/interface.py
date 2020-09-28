@@ -30,9 +30,10 @@ def train(args):
 	dataset_source_fname = os.path.join(DATASETS, args.dataset_name, "source.json")
 	with open(dataset_source_fname, "r") as f:
 		dataset_source = json.load(f)
-	if not dataset_source.get("useNoiseClasses", False):
+	if "weights" not in dataset_source:
 		print(f"Dataset {args.dataset_name} was not created using noise classes.", file=sys.stderr)
 		print("An attempt will be made to match the labels to existing classes.", file=sys.stderr, flush=True)
+		dataset_source["weights"] = dict((label, 1 / len(dataset_source["labels"])) for label in dataset_source["labels"])
 	
 	if args.update is not None:
 		noise_classes_old = _load(args, False)
@@ -43,7 +44,7 @@ def train(args):
 	print("Initializing classifiers")
 	noise_classes = NoiseClass.from_file(args.noise_classes)
 	default_settings = None
-	for label in dataset_source["labels"]:
+	for label in dataset_source["weights"]:
 		if label not in noise_classes:
 			print(f"Label {label} of dataset {args.dataset_name} is not among the defined noise classes in {args.noise_classes}", file=sys.stderr, flush=True)
 			continue
@@ -292,7 +293,11 @@ def test(args):
 			("Hamming loss", "Jaccard index", "Precision", "Recall", "F1-score", "Subset accuracy"),
 			(hamming, jaccard, precision, recall, f1_score, exact)):
 		print(f"{name + ':':<18}{value:.3}")
-	print("Predicted label cardinality:", f"{tot_predicted_labels / guessed_labels.shape[0]:.3}")
+	print(
+		"Predicted label cardinality:",
+		f"{tot_predicted_labels / guessed_labels.shape[0]:.3}",
+		f"(true: {tot_true_labels / labels.shape[0]:.3})"
+	)
 		
 
 def _label(args):

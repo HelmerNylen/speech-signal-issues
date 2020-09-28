@@ -33,8 +33,8 @@
 	},
 	"GMM": {
 		"parameters": {
-			"n_components": 1,
-			"n_init": 2,
+			"n_components": 2,
+			"n_init": 4,
 			"max_iter": 100,
 			"tol": 0,
 			"covariance_type": "diag"

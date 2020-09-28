@@ -43,11 +43,25 @@ def _filenames(folder: str, num: int, ext: str):
 	for i in range(1, num + 1):
 		yield os.path.join(folder, str(i).rjust(math.ceil(math.log10(num)), '0') + ext)
 
-def _labels(_type: dict) -> list:
-	if "label" in _type:
-		return [_type["label"]]
-	else:
-		return _type.get("labels", [])
+def get_degradations(labels, label_columns, pipeline, noise_classes, operations, incompatible) -> list:
+	assert labels.shape[1] == len(label_columns)
+
+	res = []
+	for row in labels:
+		degs = []
+		true_labels = tuple(label for haslabel, label in zip(row, label_columns) if haslabel)
+		for _id in pipeline:
+			if _id in operations:
+				for combination in incompatible:
+					if _id in combination and any(label in true_labels for label in combination):
+						break
+				else:
+					degs.extend(operations[_id])
+			elif _id in true_labels:
+				degs.extend(noise_classes[_id].degradations)
+		res.append(degs)
+	
+	return res
 
 def create(args):
 	# Matlab must be loaded before any module which depends on random
@@ -60,20 +74,23 @@ def create(args):
 
 	# Begin starting Matlab asynchronously
 	m_eng = matlab.engine.start_matlab(background=True)
-
+	
 	# Find all source sound files
 	noise, n_noisefiles = read_noise(args.noise)
 	speech, n_speechfiles = read_speech(args.speech)
 	
 	if n_noisefiles == 0:
 		print("No noise files found", file=sys.stderr)
+		m_eng.cancel()
 		sys.exit(1)
 	if n_speechfiles == 0:
 		print("No speech files found", file=sys.stderr)
+		m_eng.cancel()
 		sys.exit(1)
 
 	if not os.path.exists(args.specification):
 		print("File not found:", args.specification, file=sys.stderr)
+		m_eng.cancel()
 		sys.exit(1)
 	
 	with open(args.specification, "r") as f:
@@ -92,6 +109,7 @@ def create(args):
 		ds_test = int(ds_test)
 	if ds_train < 0 or ds_test < 0 or ds_train + ds_test > n_speechfiles:
 		print(f"Invalid partition of files: {ds_train} train, {ds_test} test, {ds_train + ds_test} total", file=sys.stderr)
+		m_eng.cancel()
 		sys.exit(1)
 	print(f"Speech: {ds_train} training files and {ds_test} testing files")
 	
@@ -115,64 +133,105 @@ def create(args):
 		print(f"\t{noise_type}: {split} training files and {len(files) - split} testing files")
 	del noise
 
-	# If a noise class spec, import degradations from noise class file
-	if spec.get("useNoiseClasses", False):
-		sys.path.append(os.path.join(PROJECT_ROOT, "noise_classes"))
-		from noise_class import NoiseClass #pylint: disable=import-error
+	# Load noise classes and dataset operations
+	sys.path.append(os.path.join(PROJECT_ROOT, "noise_classes"))
+	from noise_class import NoiseClass #pylint: disable=import-error
 
-		if not os.path.exists(args.noise_classes):
-			print(f"Noise class file {args.noise_classes} does not exist")
-			sys.exit(1)
-		noise_classes = NoiseClass.from_file(args.noise_classes)
+	if not os.path.exists(args.noise_classes):
+		print(f"Noise class file {args.noise_classes} does not exist", file=sys.stderr)
+		m_eng.cancel()
+		sys.exit(1)
+	noise_classes = NoiseClass.from_file(args.noise_classes)
+	operations = dict((op["name"], op["degradations"]) for op in spec.get("operations", []))
 
-		spec["types"] = []
-		spec["labels"] = []
-		for nc_id, weight in spec["weights"].items():
-			if nc_id not in noise_classes:
-				print(f"Noise class {nc_id} not specified in {args.noise_classes}")
-				sys.exit(1)
-			spec["types"].append({
-				"label": nc_id,
-				"weight": weight,
-				"degradations": noise_classes[nc_id].degradations
-			})
-			spec["labels"].append(nc_id)
-
-	# Verify degradation type labels
-	for i, _type in enumerate(spec["types"]):
-		for label in _labels(_type):
-			if label not in spec["labels"]:
-				print(f"Warning: Label '{label}' on type {i} not among the dataset's labels ({', '.join(spec['labels'])})", file=sys.stderr)
-	for label in spec["labels"]:
-		if isinstance(label, str):
-			has_double = sum(label.lower() == l.lower() for l in spec["labels"] if isinstance(l, str)) > 1
-		else:
-			has_double = sum(label == l for l in spec["labels"]) > 1
-		if has_double:
-			print(f"Label {label} has a{' case-insensitive' if isinstance(label, str) else ''} double")
+	# Check that all noise classes required are defined
+	weights = spec["weights"]
+	for nc_id in weights.keys():
+		if nc_id not in noise_classes:
+			print(f"Noise class {nc_id} not specified in {args.noise_classes}", file=sys.stderr)
+			m_eng.cancel()
 			sys.exit(1)
 
+	# Check that the pipeline is correct
+	for _id in spec["pipeline"]:
+		if _id in operations.keys() and _id in noise_classes.keys():
+			print(f"pipeline: {_id} defined both as a noise class and as an operation", file=sys.stderr)
+			m_eng.cancel()
+			sys.exit(1)
+		if _id not in operations.keys() and _id not in noise_classes.keys():
+			print(f"pipeline: {_id} not defined (not found among noise classes or operations)", file=sys.stderr)
+			m_eng.cancel()
+			sys.exit(1)
 
-	# Assign degradation types indexes to speech files
+	# Assign labels to speech files
 	import numpy as np
-	weights = [t.get("weight", 1) for t in spec["types"]]
-	weight_sum = sum(weights)
 
-	types_train = [i for i, t in enumerate(spec["types"]) for _ in range(int(t.get("weight", 1) * len(speech_train) // weight_sum))]
-	types_train = types_train + random.choices(range(len(spec["types"])), weights, k=len(speech_train) - len(types_train))
-	random.shuffle(types_train)
-	bincount = np.bincount(types_train)
-	print("Training samples:")
-	for i, t in enumerate(spec["types"]):
-		print(f"\t{bincount[i]} {', '.join(_labels(t))}")
+	labels_train = np.full((len(speech_train), len(weights)), False)
+	labels_test = np.full((len(speech_test), len(weights)), False)
+	for i, w in enumerate(weights.values()):
+		for labels in (labels_train, labels_test):
+			labels[:int(len(labels) * w), i] = True
+			random.shuffle(labels[:, i])
 
-	types_test = [i for i, t in enumerate(spec["types"]) for _ in range(int(t.get("weight", 1) * len(speech_test) // weight_sum))]
-	types_test = types_test + random.choices(range(len(spec["types"])), weights, k=len(speech_test) - len(types_test))
-	random.shuffle(types_test)
-	bincount = np.bincount(types_test)
-	print("Testing samples:")
-	for i, t in enumerate(spec["types"]):
-		print(f"\t{bincount[i]} {', '.join(_labels(t))}")
+	# Check that the list of incompatible classes/operations is correct
+	for combination in spec.get("incompatible", []):
+		nc_count = 0
+		op_count = 0
+		for _id in combination:
+			if _id in operations.keys():
+				if _id in noise_classes.keys():
+					print(f"incompatible: {_id} defined both as a noise class and as an operation", file=sys.stderr)
+					m_eng.cancel()
+					sys.exit(1)
+				else:
+					op_count += 1
+			else:
+				if _id not in noise_classes.keys():
+					print(f"incompatible: {_id} not defined (not found among noise classes or operations)", file=sys.stderr)
+					m_eng.cancel()
+					sys.exit(1)
+				else:
+					nc_count += 1
+
+		if op_count > 1:
+			print(f"incompatible: two operations cannot be incompatible (combination {combination})", file=sys.stderr)
+			m_eng.cancel()
+			sys.exit(1)
+		if nc_count + op_count <= 1:
+			print(f"incompatible: at least two ids needed for a valid combination (combination {combination})", file=sys.stderr)
+			m_eng.cancel()
+			sys.exit(1)
+		
+	
+	# Check for and resolve incompatible combinations
+	incompatible = [np.array([w in combo for w in weights.keys()]) for combo in spec.get("incompatible", [])]
+	for combo in incompatible:
+		combo_weights = np.array([w for i, w in enumerate(weights.values()) if combo[i]])
+		if len(combo) == 0:
+			print("Zero-length combination in \"incompatible\"", file=sys.stderr)
+			m_eng.cancel()
+			sys.exit(1)
+		combo_weights = combo_weights.cumsum() / combo_weights.sum()
+
+		for labels in (labels_train, labels_test):
+			idxs, = ((labels & combo) == combo).all(axis=1).nonzero()
+			for i in range(len(combo_weights)):
+				s = slice(None if i == 0 else int(combo_weights[i-1] * len(labels)),
+				          None if i == len(combo_weights) - 1 else int(combo_weights[i] * len(labels)))
+				# Replace with only one of the incompatible labels, proportional to how common each label should be
+				labels[idxs[s]] &= ~combo | (combo.cumsum() == i + 1)
+
+	# Display stats for the user
+	# TODO: maybe make something more concise and useful of this, otherwise remove
+	#for t, labels in (("Training set", labels_train), ("Testing set", labels_test)):
+	#	sums = dict()
+	#	for row in labels:
+	#		sums[tuple(row)] = sums.get(tuple(row), 0) + 1
+	#	print((" " + t + " ").center(30, "-"))
+	#	for row, count in sums.items():
+	#		print(count, "with labels:", *(w for i, w in enumerate(weights.keys()) if row[i]), end="")
+	#		print(" -" if not any(row) else "")
+	
 
 	# Setup Matlab
 	print("Setting up Matlab ...", end="", flush=True)
@@ -185,6 +244,8 @@ def create(args):
 	print(" Done")
 
 	# Create output directory
+	if args.name:
+		spec["name"] = args.name
 	dataset_folder = os.path.join(args.datasets, spec["name"])
 	output_train = os.path.join(dataset_folder, "train")
 	output_test = os.path.join(dataset_folder, "test")
@@ -201,7 +262,7 @@ def create(args):
 			print(f"Removed {c} file{'s' if c != 1 else ''}")
 		else:
 			print("Dataset", spec["name"], "already exists", file=sys.stderr)
-			print("Run with the --overwrite flag if you wish to overwrite the dataset")
+			print("Run with the --overwrite flag if you wish to overwrite the dataset", file=sys.stderr)
 			sys.exit(1)
 	else:
 		for folder in (dataset_folder, output_train, output_test):
@@ -212,19 +273,19 @@ def create(args):
 				print(folder, "already exists")
 
 	# Create datasets
-	for t, speech_t, types_t, noise_t, output_t in [
-		["train", speech_train, types_train, noise_train, output_train],
-		["test", speech_test, types_test, noise_test, output_test]
+	for t, speech_t, noise_t, labels_t, output_t in [
+		["train", speech_train, noise_train, labels_train, output_train],
+		["test", speech_test, noise_test, labels_test, output_test]
 	]:
 		print(f"Creating {t}ing data")
 
 		print("\tSetting up Matlab arguments")
-		degradations = [spec["types"][_type]["degradations"] for _type in types_t]
+		degradations = get_degradations(labels_t, tuple(weights.keys()), spec["pipeline"], noise_classes, operations, spec.get("incompatible", []))
 
 		# Load degradation instructions into Matlab memory
-		# The overhead for passing audio data between Python and Matlab is extremely high,
-		# so Matlab is only sent the filenames and left to figure out the rest for itself
-		# Further, certain datatypes (struct arrays) cannot be sent to/from Python
+		#   The overhead for passing audio data between Python and Matlab is extremely high,
+		#   so Matlab is only sent the filenames and left to figure out the rest for itself
+		#   Further, certain datatypes (struct arrays) cannot be sent to/from Python
 		setup_matlab_degradations(speech_t, degradations, noise_t, m_eng, "degradations")
 
 		# Store all variables in Matlab memory
@@ -257,12 +318,10 @@ def create(args):
 		label_file = os.path.join(output_t, "labels.csv")
 		with open(label_file, "w", newline='') as f:
 			writer = csv.writer(f)
-			writer.writerow(("Filename",)
-					+ tuple(str(l).lower() for l in spec["labels"]))
-			for filename, typeind in zip(output_files, types_t):
-				labels = _labels(spec["types"][typeind])
+			writer.writerow(("Filename",) + tuple(weights.keys()))
+			for filename, labels in zip(output_files, labels_t):
 				writer.writerow((os.path.basename(filename),)
-						+ tuple(int(l in labels) for l in spec["labels"]))
+						+ tuple(int(haslabel) for haslabel in labels))
 
 		print("Done")
 	
@@ -295,7 +354,7 @@ def list_files(args):
 	print(f"Found {n_speechfiles} speech files")
 	for t in ("test", "train"):
 		print(f"\t{sum(len(fs) for d, fs in speech if t in d.lower())} in set \"{t}\"")
-	print(f"Noise types: {', '.join(s for s in DEGRADATIONS if s != 'pad')}")
+	print(f"Degradation types: {', '.join(repr(s) for s in DEGRADATIONS)}")
 
 def prepare(args):
 	from preparations import prep_folder
@@ -347,8 +406,7 @@ if __name__ == "__main__":
 	subparser.set_defaults(func=create)
 
 	subparser.add_argument("specification", help="JSON file with a dataset specification", metavar="myfile.json")
-	# TODO: Ability to override these on the command line?
-	#subparser.add_argument("-n", "--name", help="Override name of the new dataset", metavar="MyDataset", default=None)
+	subparser.add_argument("-n", "--name", help="Override name of the new dataset", metavar="MyDataset", default=None)
 	# TODO: maybe add ability to filter which labels should be used in the dataset? (Label groups?)
 
 	# TODO: implement?

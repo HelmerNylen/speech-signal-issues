@@ -52,7 +52,7 @@ def histogram(filenames, *, ratio: bool=True, n_bins: int=20, relative_bins: boo
 		if ratio:
 			hist = hist / len(y)
 
-		res.append(hist.reshape(1, -1))
+		res.append(hist.reshape(1, -1).astype('float32'))
 
 	return res
 
@@ -94,6 +94,6 @@ def rms_energy_infra(filenames, *, frame_length: int=500, hop_length: int=None, 
 		S[freqs > threshold, :] = 0
 
 		res.append(librosa.feature.rms(S=S, frame_length=frame_length_used, hop_length=hop_length_used)\
-			.reshape(-1, 1))
-
+			.reshape(-1, 1).astype('float32'))
+	
 	return res

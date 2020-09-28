@@ -1,30 +1,4 @@
 [{
-	"id": "pad-norm",
-	"name": "Padded and Normalized",
-	"info": {
-		"description": "Pseudo-class for non-corrupted recordings which have been padded and normalized."
-	},
-	"degradations": [
-		{
-			"name": "pad",
-			"before": 1,
-			"after": 1
-		}, {
-			"name": "normalize"
-		}
-	]
-}, {
-	"id": "norm",
-	"name": "Normalized",
-	"info": {
-		"description": "Pseudo-class for non-corrupted recordings which have been normalized."
-	},
-	"degradations": [
-		{
-			"name": "normalize"
-		}
-	]
-}, {
 	"id": "add-white",
 	"name": "White Noise",
 	"info": {
@@ -34,14 +8,10 @@
 	},
 	"degradations": [
 		{
-			"name": "pad",
-			"before": 1,
-			"after": 1
-		},{
 			"name": "addNoise",
 			"noiseColor": "white",
 			"snrRatio": 40,
-			"normalizeOutputAudio": true
+			"normalizeOutputAudio": false
 		}
 	],
 	"classifiers": [
@@ -70,15 +40,11 @@
 	},
 	"degradations": [
 		{
-			"name": "pad",
-			"before": 1,
-			"after": 1
-		},{
 			"name": "addSound",
 			"addSoundFile": {"randomNoiseFile": "aircon"},
 			"addSoundFileStart": "random",
 			"snrRatio": 40,
-			"normalizeOutputAudio": true
+			"normalizeOutputAudio": false
 		}
 	],
 	"classifiers": [
@@ -107,15 +73,11 @@
 	},
 	"degradations": [
 		{
-			"name": "pad",
-			"before": 1,
-			"after": 1
-		},{
 			"name": "addSound",
 			"addSoundFile": {"randomNoiseFile": "electric-hum"},
 			"addSoundFileStart": "random",
 			"snrRatio": 40,
-			"normalizeOutputAudio": true
+			"normalizeOutputAudio": false
 		}
 	],
 	"classifiers": [
@@ -182,11 +144,10 @@
 	"degradations": [
 		{
 			"name": "applyClippingAlternative",
-			"percentOfSamples": 20
+			"percentOfSamples": {"randomRange": [5, 20]}
 		}, {
-			"name": "pad",
-			"before": 1,
-			"after": 1
+			"name": "normalize",
+			"maxAmplitude": {"randomRange": [0.5, 0.999]}
 		}
 	],
 	"classifiers": [
@@ -212,11 +173,10 @@
 	"degradations": [
 		{
 			"name": "applySoftClipping",
-			"percentOfSamples": 20
+			"percentOfSamples": {"randomRange": [5, 20]}
 		}, {
-			"name": "pad",
-			"before": 1,
-			"after": 1
+			"name": "normalize",
+			"maxAmplitude": {"randomRange": [0.5, 0.999]}
 		}
 	],
 	"classifiers": [
@@ -246,12 +206,6 @@
 			"muteLengthMin": 0.1,
 			"muteLengthMax": 0.75,
 			"mutePauseMin": 0.05
-		}, {
-			"name": "pad",
-			"before": 1,
-			"after": 1
-		}, {
-			"name": "normalize"
 		}
 	],
 	"classifiers": [
@@ -275,13 +229,10 @@
 	},
 	"degradations": [
 		{
-			"name": "pad",
-			"before": 1,
-			"after": 1
-		},{
 			"name": "addInfrasound",
 			"sinusoidFreqs": [{"randomRange": [2, 12]}, {"randomRange": [8, 18]}],
-			"normalizeOutputAudio": true
+			"snrRatio": 20,
+			"normalizeOutputAudio": false
 		}
 	],
 	"classifiers": [
