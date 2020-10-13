@@ -1,0 +1,57 @@
+{
+	"name":		"BalancedDataset",
+	"train": 	0.75,
+	"test":		0.25,
+	"weights": {
+		"add-white":		0.5,
+		"add-aircon":		0.5,
+		"add-hum":			0.5,
+		"add-infra":		0.5,
+		"clipping-hard":	0.5,
+		"clipping-soft":	0.5,
+		"mute":				0.5
+	},
+	"pipeline": [
+		"pad-1",
+		"add-white",
+		"add-aircon",
+		"add-hum",
+		"add-infra",
+		"mute",
+		"clipping-soft",
+		"clipping-hard",
+		"normalize-rand"
+	],
+	"incompatible": [
+		["clipping-soft", "clipping-hard", "normalize-rand"]
+	],
+	"operations": [
+		{
+			"name": "pad-1",
+			"degradations": [
+				{
+					"name": "pad",
+					"before": 1,
+					"after": 1
+				}
+			]
+		},
+		{
+			"name": "normalize",
+			"degradations": [
+				{
+					"name": "normalize"
+				}
+			]
+		},
+		{
+			"name": "normalize-rand",
+			"degradations": [
+				{
+					"name": "normalize",
+					"maxAmplitude": {"randomRange": [0.5, 0.999]}
+				}
+			]
+		}
+	]
+}

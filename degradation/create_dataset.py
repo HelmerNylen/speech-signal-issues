@@ -151,6 +151,12 @@ def create(args):
 			print(f"Noise class {nc_id} not specified in {args.noise_classes}", file=sys.stderr)
 			m_eng.cancel()
 			sys.exit(1)
+	if "noise_class_degradations" in spec:
+		print("Warning: when using an existing dataset as the specification,", file=sys.stderr)
+		print("the degradations are still taken from the current noise class file:", file=sys.stderr)
+		print(args.noise_classes, file=sys.stderr)
+		print("The 'noise_class_degradations' field in the specifications of the", file=sys.stderr)
+		print("two datasets may differ as a result.", file=sys.stderr, flush=True)
 
 	# Check that the pipeline is correct
 	for _id in spec["pipeline"]:
@@ -216,8 +222,8 @@ def create(args):
 		for labels in (labels_train, labels_test):
 			idxs, = ((labels & combo) == combo).all(axis=1).nonzero()
 			for i in range(len(combo_weights)):
-				s = slice(None if i == 0 else int(combo_weights[i-1] * len(labels)),
-				          None if i == len(combo_weights) - 1 else int(combo_weights[i] * len(labels)))
+				s = slice(None if i == 0 else int(combo_weights[i-1] * len(idxs)),
+				          None if i == len(combo_weights) - 1 else int(combo_weights[i] * len(idxs)))
 				# Replace with only one of the incompatible labels, proportional to how common each label should be
 				labels[idxs[s]] &= ~combo | (combo.cumsum() == i + 1)
 
@@ -325,6 +331,11 @@ def create(args):
 
 		print("Done")
 	
+	# Append used noise class degradations to specification and save it
+	spec["noise_class_degradations"] = dict()
+	for nc_id in spec["weights"].keys():
+		spec["noise_class_degradations"][nc_id] = noise_classes[nc_id].degradations
+
 	with open(os.path.join(dataset_folder, "source.json"), "w") as f:
 		json.dump(spec, f, indent='\t')
 	print("Wrote source.json")
