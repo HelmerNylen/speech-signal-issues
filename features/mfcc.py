@@ -11,7 +11,7 @@ def mfcc_kaldi(filenames, **kwargs):
 	with NamedTemporaryFile(suffix=".ark") as ark:
 		cmd = [
 			'compute-mfcc-feats',
-			*(f"--{key}={val}" for key, val in kwargs),
+			*(f"--{key}={val}" for key, val in kwargs.items()),
 			'scp:-',
 			'ark:' + ark.name
 		]

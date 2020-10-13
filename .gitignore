@@ -1,7 +1,9 @@
 # -- Project-specific --
 .vscode/
 features/kaldi*
+classifier/gm_hmm*
 pyenv/
+testresults/
 
 # -- GitHub Python default --
 # Byte-compiled / optimized / DLL files

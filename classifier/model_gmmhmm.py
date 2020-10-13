@@ -2,7 +2,7 @@ import numpy as np
 import warnings
 from hmmlearn.base import ConvergenceMonitor
 from hmmlearn import hmm
-from classifier.model import Model
+from .model import Model
 
 import logging
 _log = logging.getLogger(hmm.__name__)

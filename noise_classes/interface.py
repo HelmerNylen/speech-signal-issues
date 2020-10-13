@@ -11,15 +11,16 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__f
 DATASETS = os.path.join(PROJECT_ROOT, "datasets")
 
 sys.path.append(PROJECT_ROOT)
-from noise_class import NoiseClass #pylint: disable=import-error
+from noise_classes.noise_class import NoiseClass #pylint: disable=import-error
 from features.feature_extraction import read_dataset, extract_features
 from classifier.classifier import Classifier
 from classifier.confusion_table import ConfusionTable
 
 from classifier.model_lstm import LSTM
 from classifier.model_gmmhmm import GMMHMM
+from classifier.model_genhmm import GenHMM
 from classifier.model_gmm import GMM
-avaliable_models = (LSTM, GMMHMM, GMM)
+avaliable_models = (LSTM, GMMHMM, GenHMM, GMM)
 setting_categories = ("parameters", "train", "score")
 
 def train(args):
@@ -36,7 +37,7 @@ def train(args):
 		dataset_source["weights"] = dict((label, 1 / len(dataset_source["labels"])) for label in dataset_source["labels"])
 	
 	if args.update is not None:
-		noise_classes_old = _load(args, False)
+		noise_classes_old = load_noise_classes(args, False)
 		if noise_classes_old is None:
 			args.update = None
 	
@@ -72,20 +73,12 @@ def train(args):
 				print(", weight:", classifier_spec.get('weight', 1), end="")
 			if "bootstrap" in classifier_spec:
 				print(", bootstrap:", classifier_spec["bootstrap"], end="")
+			if classifier_spec.get("vad", None):
+				print(", VAD:", "unvoiced" if classifier_spec["vad"].get("inverse", False) else "voiced", end="")
 			print(")")
 
 			# Setup classifier specifications
-			for category in setting_categories:
-				if classifier_spec.get(category, "default") == "default":
-					# Load defaults if needed
-					if default_settings is None:
-						if not os.path.exists(args.classifier_defaults):
-							print(f"Classifier defaults file {args.classifier_defaults} does not exist", file=sys.stderr)
-							sys.exit(1)
-						with open(args.classifier_defaults, "r") as f:
-							default_settings = json.load(f)
-
-					classifier_spec[category] = default_settings[classifier_spec["type"]].get(category)
+			classifier_complete_defaults(classifier_spec, args.classifier_defaults, default_settings)
 
 			# Initialize or copy old classifier
 			_type = next((m for m in avaliable_models if m.__name__ == classifier_spec["type"]), None)
@@ -99,10 +92,7 @@ def train(args):
 			if args.update is not None and nc.id in noise_classes_old and classifier_ind < len(nc_old.classifiers):
 				classifier_spec_old = nc_old.classifiers[classifier_ind]
 				if not train_all and nc.id not in args.update \
-						and all(json.dumps(classifier_spec[field]) == json.dumps(classifier_spec_old[field])
-							for field in setting_categories + ("type", "feature", "feature_settings")) \
-						and all(json.dumps(classifier_spec.get(field, False)) == json.dumps(classifier_spec_old.get(field, False))
-							for field in ("bootstrap", "vad")):
+						and classifier_specs_equal(classifier_spec, classifier_spec_old):
 					classifier_spec["instance"] = classifier_spec_old["instance"]
 					classifier_spec["notrain"] = True
 					continue
@@ -171,6 +161,24 @@ def train(args):
 		pickle.dump(noise_classes, f)
 	print("Saved to", fname)
 
+def classifier_specs_equal(a, b):
+	return all(json.dumps(a[field]) == json.dumps(b[field])
+			for field in setting_categories + ("type", "feature", "feature_settings")) \
+		and all(json.dumps(a.get(field, False)) == json.dumps(b.get(field, False))
+			for field in ("bootstrap", "vad"))
+
+def classifier_complete_defaults(classifier_spec, defaults_file, default_settings=None):
+	for category in setting_categories:
+		if classifier_spec.get(category, "default") == "default":
+			# Load defaults if needed
+			if default_settings is None:
+				if not os.path.exists(defaults_file):
+					print(f"Classifier defaults file {defaults_file} does not exist", file=sys.stderr)
+					sys.exit(1)
+				with open(defaults_file, "r") as f:
+					default_settings = json.load(f)
+
+			classifier_spec[category] = default_settings[classifier_spec["type"]].get(category)
 
 def _feat_id(spec):
 	return spec["feature"] + "/" + repr(spec["feature_settings"]) + ("/" + repr(spec["vad"]) if spec.get("vad", None) not in (None, {}) else "")
@@ -199,7 +207,7 @@ def _iterate_classifiers(spec_inds_sorted, filenames, recompute, silent=False, y
 
 		yield (spec_ind if yield_ind else spec), nc, feats, idxs
 
-def _load(args, exit_if_missing=True):
+def load_noise_classes(args, exit_if_missing=True):
 	fname = os.path.join(args.models, args.dataset_name + ".noiseclasses")
 	if not os.path.exists(fname):
 		print(f"File {fname} does not exist", file=sys.stderr)
@@ -211,13 +219,65 @@ def _load(args, exit_if_missing=True):
 	with open(fname, "rb") as f:
 		noise_classes = pickle.load(f)
 	return noise_classes
+
+def stats(predicted_labels, nc_ids, true_labels, classes):
+	mapping = np.array(list(np.where(classes == nc_id)[0][0] for nc_id in nc_ids))
+	assert predicted_labels.shape == (true_labels.shape[0], len(mapping))
+
+	confusion_tables = dict()
+	for i, nc_id in enumerate(nc_ids):
+		ct = ConfusionTable((nc_id, nc_id + " (negative)"), (nc_id, nc_id + " (negative)"))
+		ct[0, 0] = np.sum(predicted_labels[:, i] & true_labels[:, mapping[i]])
+		ct[0, 1] = np.sum(~predicted_labels[:, i] & true_labels[:, mapping[i]])
+		ct[0, ...] = ct[0, 0] + ct[0, 1]
+		ct[1, 0] = np.sum(predicted_labels[:, i] & ~true_labels[:, mapping[i]])
+		ct[1, 1] = np.sum(~predicted_labels[:, i] & ~true_labels[:, mapping[i]])
+		ct[1, ...] = ct[1, 0] + ct[1, 1]
+		confusion_tables[nc_id] = ct
+
+	hamming = 0
+	intersection = 0
+	union = 0
+	tot_predicted_labels = 0
+	tot_true_labels = 0
+	exact = 0
+
+	for filename_ind in range(predicted_labels.shape[0]):
+		g = predicted_labels[filename_ind, :]
+		t = true_labels[filename_ind, mapping]
+		hamming              += np.sum(g ^ t)
+		tot_predicted_labels += np.sum(g)
+		tot_true_labels      += np.sum(t)
+		intersection         += np.sum(g & t)
+		union                += np.sum(g | t)
+		exact                += np.all(g == t)
+
+	hamming /= predicted_labels.shape[0] * predicted_labels.shape[1]
+	jaccard = intersection / union
+	precision = intersection / tot_predicted_labels if tot_predicted_labels > 0 else 0
+	recall = intersection / tot_true_labels
+	f1_score = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
+	exact /= predicted_labels.shape[0]
+
+	stats_dict = dict((
+		("Hamming loss", hamming),
+		("Jaccard index", jaccard),
+		("Precision", precision),
+		("Recall", recall),
+		("F1-score", f1_score),
+		("Subset accuracy", exact),
+		("Predicted label cardinality", tot_predicted_labels / predicted_labels.shape[0]),
+		("True label cardinality", tot_true_labels / true_labels.shape[0])
+	))
+
+	return confusion_tables, stats_dict
 	
 def test(args):
 	if not os.path.exists(os.path.join(DATASETS, args.dataset_name)):
 		print(f"Dataset {args.dataset_name} does not exist", file=sys.stderr)
 		sys.exit(1)
 
-	noise_classes = _load(args)
+	noise_classes = load_noise_classes(args)
 	
 	# Extract features and test each classifier
 	filenames, classes, labels = read_dataset(args.dataset_name, "test")
@@ -242,66 +302,28 @@ def test(args):
 	
 	# Stats for the noise class based labeling
 	args.filenames = filenames
-	guessed_labels, nc_ids = _label(args)
-	mapping = np.array(list(np.where(classes == nc_id)[0][0] for nc_id in nc_ids))
+	predicted_labels, nc_ids = get_labels(args, noise_classes)
 
-	hamming = 0
-	intersection = 0
-	union = 0
-	tot_predicted_labels = 0
-	tot_true_labels = 0
-	exact = 0
 	print("Combined classifier statistics")
+	confusion_tables, stats_dict = stats(predicted_labels, nc_ids, labels, classes)
 
-	for i, nc_id in enumerate(nc_ids):
+	for nc_id, ct in confusion_tables.items():
 		print(noise_classes[nc_id].name)
 		if not args.skip_classifiers and len(noise_classes[nc_id].classifiers) == 1:
 			print("(see above)")
 			print()
 			continue
 
-		ct = ConfusionTable((nc_id, nc_id + " (negative)"), (nc_id, nc_id + " (negative)"))
-		ct[0, 0] = np.sum(guessed_labels[:, i] & labels[:, mapping[i]])
-		ct[0, 1] = np.sum(~guessed_labels[:, i] & labels[:, mapping[i]])
-		ct[0, ...] = ct[0, 0] + ct[0, 1]
-		ct[1, 0] = np.sum(guessed_labels[:, i] & ~labels[:, mapping[i]])
-		ct[1, 1] = np.sum(~guessed_labels[:, i] & ~labels[:, mapping[i]])
-		ct[1, ...] = ct[1, 0] + ct[1, 1]
 		print(ct)
 		print()
 
-
-	for filename_ind in range(guessed_labels.shape[0]):
-		g = guessed_labels[filename_ind, :]
-		t = labels[filename_ind, mapping]
-		hamming              += np.sum(g ^ t)
-		tot_predicted_labels += np.sum(g)
-		tot_true_labels      += np.sum(t)
-		intersection         += np.sum(g & t)
-		union                += np.sum(g | t)
-		exact                += np.all(g == t)
-	
-	hamming /= guessed_labels.shape[0] * guessed_labels.shape[1]
-	jaccard = intersection / union
-	precision = intersection / tot_predicted_labels if tot_predicted_labels > 0 else 0
-	recall = intersection / tot_true_labels
-	f1_score = 2 * (precision * recall) / (precision + recall) if precision + recall > 0 else 0
-	exact /= guessed_labels.shape[0]
-
 	print("Multilabel statistics")
-	for name, value in zip(
-			("Hamming loss", "Jaccard index", "Precision", "Recall", "F1-score", "Subset accuracy"),
-			(hamming, jaccard, precision, recall, f1_score, exact)):
-		print(f"{name + ':':<18}{value:.3}")
-	print(
-		"Predicted label cardinality:",
-		f"{tot_predicted_labels / guessed_labels.shape[0]:.3}",
-		f"(true: {tot_true_labels / labels.shape[0]:.3})"
-	)
+	for name, value in stats_dict.items():
+		print(f"{name + ':  ':<18}{value:.3}")
 		
 
-def _label(args):
-	noise_classes = _load(args)
+def get_labels(args, noise_classes=None):
+	noise_classes = load_noise_classes(args) if noise_classes is None else noise_classes
 
 	# Score all files for all classifiers
 	all_scores = dict(
@@ -323,7 +345,7 @@ def _label(args):
 	return (labels, tuple(nc_id for nc_id in noise_classes))
 
 def do_label(args):
-	labels, nc_ids = _label(args)
+	labels, nc_ids = get_labels(args)
 	if args.silent:
 		print(json.dumps(((1 * labels).tolist(), nc_ids), separators=(',', ':')))
 	else:
@@ -334,7 +356,6 @@ def do_label(args):
 			print()
 
 def check(args):
-	"""
 	if not os.path.exists(args.noise_classes):
 		print(f"Noise classes file {args.noise_classes} does not exist", file=sys.stderr)
 		nc_defs = None
@@ -349,38 +370,66 @@ def check(args):
 		with open(dataset_source_fname, "r") as f:
 			dataset_source = json.load(f)
 
-	nc_existing = _load(args, False)
-
-	print("--- IDs ---")
-	if nc_defs is not None:
-		print("Noise classes definition file:", ", ".join(sorted(list(nc_defs))))
-
-	if dataset_source is not None:
-		print("Dataset labels:", ", ".join(sorted(list(dataset_source["labels"]))))
-		if nc_defs is not None:
-			missing = set(nc_defs).difference(dataset_source["labels"])
-			if len(missing) != 0:
-				print("\tNot present in dataset:", ", ".join(sorted(missing)))
-			superfluous = set(dataset_source["labels"]).difference(nc_defs)
-			if len(superfluous) != 0:
-				print("\tNo corresponding definition:", ", ".join(sorted(superfluous)))
-
-			#changed = set(dataset_source["labels"]).difference(nc_defs)
-			#changed = set(nc_id for nc_id in changed if json.dumps(dataset_source["types"] ))
-
-	if nc_existing is not None:
-		print("Trained noise classes:", ", ".join(sorted(list(nc_existing))))
-		if dataset_source is not None:
-			missing = set(dataset_source["labels"]).difference(nc_existing)
-			if len(missing) != 0:
-				print("\tUntrained but in dataset:", ", ".join(sorted(missing)))
-			superfluous = set(dataset_source["labels"]).difference(nc_defs)
-			if len(superfluous) != 0:
-				print("\tTrained but since removed from dataset:", ", ".join(sorted(superfluous)))
-	"""
+	nc_trained = load_noise_classes(args, False)
 	
+	# Test if noise classes definition file and dataset source file agree on degradations
+	defs_dataset_ok = None
+	if nc_defs is not None and dataset_source is not None:
+		def_nc_degs = dict((nc_id, nc_defs[nc_id].degradations) for nc_id in dataset_source["noise_class_degradations"] if nc_id in nc_defs)
+		defs_dataset_ok = def_nc_degs == dataset_source["noise_class_degradations"]
+	
+	# Test if dataset source file and stored classifiers agree on noise class ids and degradations
+	dataset_trained_ok = None
+	if dataset_source is not None and nc_trained is not None:
+		if set(dataset_source["weights"].keys()) == set(nc_trained.keys()):
+			trained_nc_degs = dict((nc_id, nc_trained[nc_id].degradations) for nc_id in dataset_source["noise_class_degradations"])
+			dataset_trained_ok = dataset_source["noise_class_degradations"] == trained_nc_degs
+		else:
+			dataset_trained_ok = False
+	
+	# Test if noise classes definition file and stored classifiers agree on classifier specs
+	defs_trained_ok = None
+	if nc_defs is not None and nc_trained is not None:
+		default_settings = None
+		for nc in nc_trained.values():
+			if nc.id not in nc_defs or len(nc_defs[nc.id].classifiers) != len(nc.classifiers):
+				defs_trained_ok = False
+				break
 
+			for classifier_ind, spec_trained in enumerate(nc.classifiers):
+				spec_def = nc_defs[nc.id].classifiers[classifier_ind]
+				classifier_complete_defaults(spec_def, args.classifier_defaults, default_settings)
 
+				if not classifier_specs_equal(spec_trained, spec_def):
+					defs_trained_ok = False
+					break
+			if nc.classification_settings != nc_defs[nc.id].classification_settings:
+				defs_trained_ok = False
+
+			if defs_trained_ok is False:
+				break
+		else:
+			defs_trained_ok = True
+	
+	return defs_dataset_ok, dataset_trained_ok, defs_trained_ok
+
+def do_check(args):
+	defs_dataset_ok, dataset_trained_ok, defs_trained_ok = check(args)
+	if args.silent:
+		print(json.dumps((defs_dataset_ok, dataset_trained_ok, defs_trained_ok)))
+	else:
+		if defs_dataset_ok is False:
+			print("Discrepancy between noise classes definitions and dataset detected")
+			print("Suggested action: generate a new dataset")
+		if dataset_trained_ok is False:
+			print("Discrepancy between dataset and trained noise classes detected")
+			print("Suggested action: retrain classifiers on the new dataset")
+		if defs_trained_ok is False:
+			print("Discrepancy between noise classes definitions and trained noise classes detected")
+			print("Suggested action: retrain classifiers with the new settings")
+		if all((defs_dataset_ok, dataset_trained_ok, defs_trained_ok)):
+			print("No discrepancies detected")
+		# Other cases (where one or more test is None) are reported to sys.stderr from check()
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(
@@ -427,9 +476,15 @@ if __name__ == "__main__":
 
 
 	subparser = subparsers.add_parser("check", help="Check that the noise classes file, the dataset and the trained models are up-to-date with each other")
-	subparser.set_defaults(func=check)
+	subparser.set_defaults(func=do_check)
 
 	subparser.add_argument("dataset_name", help="Name of the dataset to check", metavar="MyDataset")
+
+	subparser.add_argument("--noise-classes", help="Path to noise class definitions (default: %(default)s)",
+			default=os.path.join(PROJECT_ROOT, "noise_classes", "noise_classes.json"), metavar="myfile.json")
+	subparser.add_argument("--classifier-defaults", help="Path to classifier default settings (default: %(default)s)",
+			default=os.path.join(PROJECT_ROOT, "classifier", "defaults.json"), metavar="myfile.json")
+	subparser.add_argument("-s", "--silent", help="Output on stdout only the results of the check, as a JSON-serialized array", action="store_true")
 
 	args = parser.parse_args()
 	start = time()

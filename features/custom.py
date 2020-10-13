@@ -56,7 +56,7 @@ def histogram(filenames, *, ratio: bool=True, n_bins: int=20, relative_bins: boo
 
 	return res
 
-def rms_energy(filenames, *, frame_length: int=30, hop_length: int=None, delta: bool=False):
+def rms_energy(filenames, *, frame_length: int=30, hop_length: int=None, delta: bool=False, normalized=False):
 	import librosa
 	
 	if hop_length is None:
@@ -69,6 +69,8 @@ def rms_energy(filenames, *, frame_length: int=30, hop_length: int=None, delta: 
 		hop_length_used = int(fs * hop_length / 1000)
 		rms = librosa.feature.rms(y=y, frame_length=frame_length_used, hop_length=hop_length_used)\
 			.reshape(-1, 1)
+		if normalized:
+			rms /= np.abs(rms).max() or 1
 		if delta:
 			diff = np.diff(rms, axis=0)
 			diff = np.pad(diff, ((1, 0), (0, 0)))
