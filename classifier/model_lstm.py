@@ -1,12 +1,12 @@
 import torch
 import warnings
+import sys
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pack_sequence, pad_packed_sequence
 import numpy as np
 from .model import Model
 
-# TODO: träningen här är konstig, vore ev. bra att göra en binär version iom noise classes
 # pylint: disable=super-init-not-called,signature-differs,arguments-differ
 class LSTM(Model):
 	MULTICLASS = True
@@ -42,9 +42,11 @@ class LSTM(Model):
 				self.device = device
 				self.lstm.to(device=self.device)
 				return True
-			except:
-				print("Unable to push to cuda device")
-				raise
+			except: #pylint: disable=bare-except
+				print("Unable to push to cuda device", file=sys.stderr)
+				self.device = 'cpu'
+				self.lstm.to(device=self.device)
+
 		return False
 	
 	def __push_packed_sequence(self, sequence):
@@ -181,7 +183,7 @@ class LSTM(Model):
 					_scores = torch.log_softmax(_scores, dim=1).cpu().numpy()
 
 				for score, idx, l in zip(_scores, idxs_and_lens[:, 0], idxs_and_lens[:, 1]):
-					# TODO: Borde score verkligen gångras med längden?
+					# TODO: Not sure if we should really multiply by the length here
 					scores[int(idx)] += score * int(l)
 					lengths[int(idx)] += int(l)
 
@@ -219,7 +221,6 @@ class LSTMModule(nn.Module):
 
 class LSTMDataset(Dataset):
 	def __init__(self, data, labels):
-		# TODO: allow concatenated sequences
 		assert not Model.is_concatenated(data)
 		assert len(data) == len(labels)
 		self.data = data

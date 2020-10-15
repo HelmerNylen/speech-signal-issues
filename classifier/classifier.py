@@ -93,7 +93,8 @@ class Classifier:
 		# Classify each sample
 		predicted_class, noise_types = self.label(features, index, silent=silent) #pylint: disable=unbalanced-tuple-unpacking
 
-		# TODO: onödig assert om man rensar upp lite
+		# TODO: noise_types is not really needed for classification (though some auxiliary scripts use them)
+		# so this assert could be cleaned up and removed
 		if not sum(a == b for a, b in zip(noise_types, self.noise_types)) == len(self.noise_types):
 			raise ValueError("Different ordering of noise types in multiclass model and classifier")
 

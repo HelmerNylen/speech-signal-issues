@@ -7,7 +7,8 @@ from tempfile import TemporaryDirectory
 
 vad = webrtcvad.Vad()
 
-# TODO: option att konvertera filen så gott det går och köra VAD på det
+# TODO: add an option to convert the file to conform to the requirements as good as possible,
+# and then perform the VAD on that file
 def analyze_gen(filenames: list, frame_length: int, aggressiveness: int):
 	if frame_length not in (10, 20, 30):
 		raise ValueError("Only frame lengths of 10, 20 or 30 ms are allowed")

@@ -35,5 +35,6 @@ class Model():
 		return split_samples(data, lengths)
 	@staticmethod
 	def is_concatenated(data):
-		# TODO: this is really not a good way, just always deal with split training data and concatenate in models if needed
+		# TODO: the whole concatenating data, splitting it, and checking it like this is pretty ugly.
+		# Would be neater to just always provide one type, and let the model do the necessary conversion if needed.
 		return isinstance(data, tuple)

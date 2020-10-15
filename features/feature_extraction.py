@@ -81,7 +81,7 @@ def extract_features(filenames: list, feature: str, feature_args: dict, vad: dic
 				(audio, smooth(activity, n=vad["smooth_n"], threshold=vad.get("smooth_treshold")))
 					for audio, activity in gen)
 
-		# TODO: lite illa att detta i princip kopierar hela datamängden till disk igen
+		# TODO: this essentially copies the entire dataset to disk, which is ugly
 		tempfiles = []
 		tempdir = None
 		for audio, activity in gen:

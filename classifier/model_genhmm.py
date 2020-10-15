@@ -67,7 +67,8 @@ class GenHMM(Model):
 		if Model.is_concatenated(train_data):
 			train_data = Model.split(*train_data)
 		train_data = [d for d, l in zip(train_data, labels[index]) if l]
-		# TODO: allow rescaling data?
+		# TODO: gmmhmm and lstm both have an option to rescale the data to mean 0/var 1,
+		# which could be considered for the genhmm as well
 
 		# Init model
 		if self.genhmm is None:

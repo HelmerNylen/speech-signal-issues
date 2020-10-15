@@ -108,7 +108,9 @@ class GMMHMM(Model):
 			ptr = 0
 			for i, l in enumerate(test_data[1]):
 				sequence = test_data[0][ptr:ptr + l, :]
-				# TODO: Borde score verkligen gångras med längden? Borde man istället labela varje sekvens och sen rösta?
+				# TODO: Should we rather label each sequence and then cast the votes,
+				# rather than multiply the scores by the length? Will the length affect the
+				# sequence's score anyway?
 				res[index[i]] += self.gmm_hmm.score(sequence) * l
 				lengths[index[i]] += l
 				ptr += l

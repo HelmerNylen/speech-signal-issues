@@ -228,7 +228,7 @@ def create(args):
 				labels[idxs[s]] &= ~combo | (combo.cumsum() == i + 1)
 
 	# Display stats for the user
-	# TODO: maybe make something more concise and useful of this, otherwise remove
+	# TODO: maybe make something more concise and useful of this
 	#for t, labels in (("Training set", labels_train), ("Testing set", labels_test)):
 	#	sums = dict()
 	#	for row in labels:
@@ -418,11 +418,10 @@ if __name__ == "__main__":
 
 	subparser.add_argument("specification", help="JSON file with a dataset specification", metavar="myfile.json")
 	subparser.add_argument("-n", "--name", help="Override name of the new dataset", metavar="MyDataset", default=None)
-	# TODO: maybe add ability to filter which labels should be used in the dataset? (Label groups?)
 
 	# TODO: implement?
-	# Currently, noise is down- or upsampled to match speech
-	# Supposedly already taken care of by 'prepare'
+	# In the ADT noise is down- or upsampled to match speech
+	# Though this is supposedly already handled by 'prepare', so once 'create' is called the downsampling has already happened
 	# subparser.add_argument("--downsample-speech", help="Downsample speech signal if noise sample rate is lower", action="store_true")
 
 	subparser.add_argument("-o", "--overwrite", help="If the dataset already exists, overwrite it. CAUTION: Existing files are deleted without prompt.", action="store_true")

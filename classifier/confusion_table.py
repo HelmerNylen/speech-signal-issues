@@ -1,6 +1,5 @@
 import numpy as np
 
-# TODO: behöver kanske uppdateras nu när ett sample kan ha flera labels
 class ConfusionTable:
 	"""Confusion table keeping track of testing metrics"""
 	TOTAL = ...
