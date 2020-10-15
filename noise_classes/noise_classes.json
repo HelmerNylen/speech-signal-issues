@@ -26,7 +26,7 @@
 				"aggressiveness": 2,
 				"inverse": true,
 				"min_length": 100,
-				"smooth_n": 7
+				"smooth_n": 5
 			}
 		}
 	]
@@ -59,7 +59,7 @@
 				"aggressiveness": 2,
 				"inverse": true,
 				"min_length": 100,
-				"smooth_n": 7
+				"smooth_n": 5
 			}
 		}
 	]
@@ -92,7 +92,7 @@
 				"aggressiveness": 2,
 				"inverse": true,
 				"min_length": 100,
-				"smooth_n": 7
+				"smooth_n": 5
 			}
 		}
 	]
@@ -115,10 +115,10 @@
 	],
 	"classifiers": [
 		{
-			"type": "GMM",
+			"type": "LSTM",
 			"parameters": "default",
 			"train": "default",
-			"feature": "histogram",
+			"feature": "mfcc_kaldi",
 			"feature_settings": {}
 		}
 	]
@@ -141,10 +141,10 @@
 	],
 	"classifiers": [
 		{
-			"type": "GMM",
+			"type": "LSTM",
 			"parameters": "default",
 			"train": "default",
-			"feature": "histogram",
+			"feature": "mfcc_kaldi",
 			"feature_settings": {}
 		}
 	]
