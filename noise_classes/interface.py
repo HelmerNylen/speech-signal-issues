@@ -18,9 +18,14 @@ from classifier.confusion_table import ConfusionTable
 
 from classifier.model_lstm import LSTM
 from classifier.model_gmmhmm import GMMHMM
-from classifier.model_genhmm import GenHMM
 from classifier.model_gmm import GMM
-avaliable_models = (LSTM, GMMHMM, GenHMM, GMM)
+available_models = (LSTM, GMMHMM, GMM)
+try:
+	from classifier.model_genhmm import GenHMM
+	available_models = (*available_models, GenHMM)
+except FileNotFoundError as e:
+	genhmm_err = e
+
 setting_categories = ("parameters", "train", "score")
 
 def train(args):
@@ -81,10 +86,11 @@ def train(args):
 			classifier_complete_defaults(classifier_spec, args.classifier_defaults, default_settings)
 
 			# Initialize or copy old classifier
-			_type = next((m for m in avaliable_models if m.__name__ == classifier_spec["type"]), None)
+			_type = next((m for m in available_models if m.__name__ == classifier_spec["type"]), None)
 			if _type is None:
 				print(f"Unrecognized classifier type {classifier_spec['type']}", file=sys.stderr)
-				sys.exit(1)
+				if classifier_spec['type'] == 'GenHMM':
+					raise genhmm_err
 			config = {
 				_type.__name__: dict((cat, classifier_spec[cat]) for cat in setting_categories if classifier_spec[cat] is not None)
 			}

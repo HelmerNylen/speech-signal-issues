@@ -37,7 +37,7 @@ class NoiseClass:
 	def compound_labels(self, scores):
 		if scores.shape != self.scores_shape(scores.shape[1]):
 			raise ValueError(f"Expected scores to be {'x'.join(map(str, self.scores_shape(scores.shape[1])))}, got {'x'.join(map(str, scores.shape))}")
-		average = "score"
+		average = "label"
 		if self.classification_settings is not None and "average" in self.classification_settings:
 			average = self.classification_settings["average"]
 		if average == "score":
