@@ -7,7 +7,7 @@ from tempfile import TemporaryDirectory
 
 vad = webrtcvad.Vad()
 
-# TODO: add an option to convert the file to conform to the requirements as good as possible,
+# TODO: add an option to convert the file to conform to the requirements as well as possible,
 # and then perform the VAD on that file
 def analyze_gen(filenames: list, frame_length: int, aggressiveness: int):
 	if frame_length not in (10, 20, 30):
@@ -100,8 +100,10 @@ def splitaudio(audio: AudioSegment, frame_length: int, activity: np.ndarray, inv
 	if all(len(segment) < min_length for segment in segments):
 		if len(segments) == 0:
 			warnings.warn("VAD filters out all audio for at least one file. Try changing the VAD or smoothing parameters.")
+			segments = [audio]
 		else:
 			warnings.warn("No VAD filtered segments were long enough for at least one file. Try changing the VAD or smoothing parameters, or decreasing min_length.")
+			segments = [audio]
 
 	if min_length > 0:
 		segments = [segment for segment in segments if len(segment) >= min_length]

@@ -56,7 +56,7 @@ def histogram(filenames, *, ratio: bool=True, n_bins: int=20, relative_bins: boo
 
 	return res
 
-def rms_energy(filenames, *, frame_length: int=30, hop_length: int=None, delta: bool=False, normalized=False):
+def rms_energy(filenames, *, frame_length: int=30, hop_length: int=None, delta: bool=False, delta_width=9, normalized=False):
 	import librosa
 	
 	if hop_length is None:
@@ -72,8 +72,7 @@ def rms_energy(filenames, *, frame_length: int=30, hop_length: int=None, delta: 
 		if normalized:
 			rms /= np.abs(rms).max() or 1
 		if delta:
-			diff = np.diff(rms, axis=0)
-			diff = np.pad(diff, ((1, 0), (0, 0)))
+			diff = librosa.feature.delta(rms, axis=0, width=delta_width)
 			rms = np.column_stack((rms, diff))
 		
 		res.append(rms)
@@ -99,3 +98,48 @@ def rms_energy_infra(filenames, *, frame_length: int=500, hop_length: int=None, 
 			.reshape(-1, 1).astype('float32'))
 	
 	return res
+
+def mfcc_kaldi_full(filenames, **kwargs):
+	from .mfcc import mfcc_kaldi
+
+	return [np.mean(mat, axis=0).reshape(1, -1) for mat in mfcc_kaldi(filenames, **kwargs)]
+
+def histogram_local(filenames, *, ratio: bool=True, n_bins: int=20, relative_bins: bool=False, frame_length: int=100, hop_length: int=None):
+	import librosa
+
+	if hop_length is None:
+		hop_length = frame_length / 2
+	
+	bins = np.linspace(-1, 1, n_bins)
+	res = []
+	for fn in filenames:
+		y, fs = librosa.load(fn, None)
+		if relative_bins:
+			bins = np.linspace(y.min(), y.max(), n_bins)
+		
+		frame_length_used = int(frame_length * fs / 1000)
+		hop_length_used = int(hop_length * fs / 1000)
+		
+		ptr = 0
+		hists = []
+		while ptr + frame_length_used < len(y):
+			hist, _ = np.histogram(y[ptr:ptr+frame_length_used], bins)
+			if ratio:
+				hist = hist / frame_length_used
+			hists.append(hist)
+			ptr += hop_length_used
+
+		res.append(np.array(hists).astype('float32'))
+
+	return res
+
+def mfcc_kaldi_delta(filenames, delta_width=9, **kwargs):
+	import librosa
+	from .mfcc import mfcc_kaldi
+
+	return [
+		np.concatenate(
+			(mat, librosa.feature.delta(mat, axis=0, width=delta_width)
+		), axis=1)
+			for mat in mfcc_kaldi(filenames, **kwargs)
+	]

@@ -2,13 +2,13 @@ import os
 import csv
 import numpy as np
 from .mfcc import mfcc_kaldi, mfcc_librosa
-from .custom import acf, histogram, rms_energy, rms_energy_infra
+from .custom import acf, histogram, rms_energy, rms_energy_infra, mfcc_kaldi_full, histogram_local, mfcc_kaldi_delta
 from .utils import root_folder, concat_samples
 
 CACHE_SIZE = 20
 
 def get_available_features() -> tuple:
-	feats = (mfcc_kaldi, mfcc_librosa, acf, histogram, rms_energy, rms_energy_infra)
+	feats = (mfcc_kaldi, mfcc_librosa, acf, histogram, rms_energy, rms_energy_infra, mfcc_kaldi_full, histogram_local, mfcc_kaldi_delta)
 	return tuple(f.__name__ for f in feats), feats
 
 def read_dataset(name: str, partition: str, label: str=None) -> tuple:
