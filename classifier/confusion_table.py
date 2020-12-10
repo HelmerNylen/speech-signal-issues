@@ -1,5 +1,6 @@
 import numpy as np
 
+# Might be good to replace this with the sklearn confusion table
 class ConfusionTable:
 	"""Confusion table keeping track of testing metrics"""
 	TOTAL = ...

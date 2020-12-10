@@ -4,6 +4,9 @@ from hmmlearn.base import ConvergenceMonitor
 from hmmlearn import hmm
 from .model import Model
 
+from sklearn.utils import check_array
+from hmmlearn.utils import iter_from_X_lengths
+
 import logging
 _log = logging.getLogger(hmm.__name__)
 
@@ -201,3 +204,65 @@ class _GMMHMM(hmm.GMMHMM):
 
 		else:
 			super()._do_mstep(stats)
+
+ 	# pylint: disable=redefined-builtin
+	def fit(self, X, lengths=None):
+		"""Estimate model parameters.
+
+		An initialization step is performed before entering the
+		EM algorithm. If you want to avoid this step for a subset of
+		the parameters, pass proper ``init_params`` keyword argument
+		to estimator's constructor.
+
+		Parameters
+		----------
+		X : array-like, shape (n_samples, n_features)
+			Feature matrix of individual samples.
+
+		lengths : array-like of integers, shape (n_sequences, )
+			Lengths of the individual sequences in ``X``. The sum of
+			these should be ``n_samples``.
+
+		Returns
+		-------
+		self : object
+			Returns self.
+		"""
+		X = check_array(X)
+		self._init(X, lengths=lengths)
+		self._check()
+
+		self.monitor_._reset()
+		for iter in range(self.n_iter):
+			stats = self._initialize_sufficient_statistics()
+			curr_logprob = 0
+			for i, j in iter_from_X_lengths(X, lengths):
+				framelogprob = self._compute_log_likelihood(X[i:j])
+				logprob, fwdlattice = self._do_forward_pass(framelogprob)
+				curr_logprob += logprob
+				bwdlattice = self._do_backward_pass(framelogprob)
+				posteriors = self._compute_posteriors(fwdlattice, bwdlattice)
+				try:
+					with np.errstate(invalid="raise"):
+						self._accumulate_sufficient_statistics(
+							stats, X[i:j], framelogprob, posteriors, fwdlattice,
+							bwdlattice)
+				except FloatingPointError as e:
+					print(f"{type(e).__name__}: {e}")
+					print("Divergence detected, stopping training")
+					return self
+					
+
+			# XXX must be before convergence check, because otherwise
+			#	 there won't be any updates for the case ``n_iter=1``.
+			self._do_mstep(stats)
+
+			self.monitor_.report(curr_logprob)
+			if self.monitor_.converged:
+				break
+
+		if (self.transmat_.sum(axis=1) == 0).any():
+			_log.warning("Some rows of transmat_ have zero sum because no "
+						 "transition from the state was ever observed.")
+
+		return self
