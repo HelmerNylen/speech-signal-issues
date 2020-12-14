@@ -42,12 +42,12 @@ def acf(filenames, *, require_max: bool=False, ratio: bool=True, threshold: floa
 def histogram(filenames, *, ratio: bool=True, n_bins: int=20, relative_bins: bool=False):
 	import librosa
 	
-	bins = np.linspace(-1, 1, n_bins)
+	bins = np.linspace(-1, 1, n_bins + 1)
 	res = []
 	for fn in filenames:
 		y, _ = librosa.load(fn, None)
 		if relative_bins:
-			bins = np.linspace(y.min(), y.max(), n_bins)
+			bins = np.linspace(y.min(), y.max(), n_bins + 1)
 		hist, _ = np.histogram(y, bins)
 		if ratio:
 			hist = hist / len(y)

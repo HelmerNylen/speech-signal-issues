@@ -33,8 +33,11 @@ ds_names = [DATASET_NAME + (str(i+1) if i > 0 else "") for i in range(n_realizat
 
 def dataset_definition_equivalent(ds_name):
 	required_fields = ("train", "test", "weights", "pipeline", "incompatible", "operations")
-	with open(os.path.join(root, "datasets", ds_name, "source.json"), 'r') as f:
-		realization = json.load(f)
+	try:
+		with open(os.path.join(root, "datasets", ds_name, "source.json"), 'r') as f:
+			realization = json.load(f)
+	except FileNotFoundError:
+		return False
 	with open(ds_json, 'r') as f:
 		definition = json.load(f)
 	
@@ -56,11 +59,12 @@ def assert_datasets_correct():
 		).stdout)
 		
 		cmd = (os.path.join(root, "degradation", "create_dataset.py"), "create", ds_json, "--name", ds_name, "--noise-classes", nc_json)
-		if res[0] is None:
+		
+		if res[0] is None and not os.path.exists(os.path.join(root, "datasets", ds_name)):
 			# Dataset does not exist, create it
 			subprocess.run(cmd, check=True)
 		elif res[0] is False or not dataset_definition_equivalent(ds_name):
-			# Dataset exists but is outdated, overwrite it
+			# Dataset exists but is outdated or unfinished, overwrite it
 			subprocess.run((*cmd, "--overwrite"), check=True)
 		else:
 			print(ds_name, "exists and is up-to-date")

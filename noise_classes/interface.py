@@ -369,7 +369,7 @@ def check(args):
 		nc_defs = NoiseClass.from_file(args.noise_classes)
 
 	dataset_source = None
-	if not os.path.exists(os.path.join(DATASETS, args.dataset_name)):
+	if not os.path.exists(os.path.join(DATASETS, args.dataset_name, "source.json")):
 		print(f"Dataset {args.dataset_name} does not exist", file=sys.stderr)
 	else:
 		dataset_source_fname = os.path.join(DATASETS, args.dataset_name, "source.json")
