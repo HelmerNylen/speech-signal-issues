@@ -12,13 +12,13 @@ File|Source|License
 009.wav|https://freesound.org/people/PureAudioNinja/sounds/341616/|[Public domain](https://creativecommons.org/publicdomain/zero/1.0/)
 010.wav|https://freesound.org/people/PureAudioNinja/sounds/341617/|[Public domain](https://creativecommons.org/publicdomain/zero/1.0/)
 011.wav|https://freesound.org/people/PureAudioNinja/sounds/402538/|[Attribution 3.0 Unported](https://creativecommons.org/licenses/by/3.0/)
-012.wav|Sten Ternström|-
-013.wav|Sten Ternström|-
-014.wav|Sten Ternström|-
-015.wav|Sten Ternström|-
-016.wav|Sten Ternström|-
-017.wav|Sten Ternström|-
-018.wav|Sten Ternström|-
-019.wav|Sten Ternström|-
+012.wav|Sten Ternström|No license
+013.wav|Sten Ternström|No license
+014.wav|Sten Ternström|No license
+015.wav|Sten Ternström|No license
+016.wav|Sten Ternström|No license
+017.wav|Sten Ternström|No license
+018.wav|Sten Ternström|No license
+019.wav|Sten Ternström|No license
 
 Some files have been altered from their original.
