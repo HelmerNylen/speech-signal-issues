@@ -11,7 +11,6 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.realpath(__f
 
 def _noise_files(noise_folder, keep=(".wav",)):
 	walk = os.walk(noise_folder, followlinks=True)
-	# Skip .WAV (uppercase) files as these are unprocessed timit sphere files (i.e. don't use os.path.splitext(fn)[-1].lower())
 	walk = ((dp, dn, [fn for fn in filenames if os.path.splitext(fn)[-1] in keep])
 			for dp, dn, filenames in walk)
 	walk = ((os.path.relpath(dirpath, noise_folder), (dirpath, filenames))
@@ -357,14 +356,12 @@ def list_files(args):
 
 	# Find all source sound files
 	noise, n_noisefiles = read_noise(args.noise)
-	speech, n_speechfiles = read_speech(args.speech)
+	_, n_speechfiles = read_speech(args.speech)
 	
 	print(f"Found {n_noisefiles} noise files")
 	for noisetype in noise:
 		print(f"\t{len(noise[noisetype][1])} of type \"{noisetype}\"")
 	print(f"Found {n_speechfiles} speech files")
-	for t in ("test", "train"):
-		print(f"\t{sum(len(fs) for d, fs in speech if t in d.lower())} in set \"{t}\"")
 	print(f"Degradation types: {', '.join(repr(s) for s in DEGRADATIONS)}")
 
 def prepare(args):

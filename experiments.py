@@ -13,42 +13,68 @@ from argparse import Namespace
 from contextlib import redirect_stdout
 
 root = interface.PROJECT_ROOT
-# The name of the dataset (suffixed by 2, 3, etc. if there are multiple realizations)
-DATASET_NAME = "BasicDataset"
+
+# Dataset definition file
 ds_json = os.path.join(root, "degradation", "basic_dataset.json")
+# Noise classes definition file
+nc_json = os.path.join(root, "noise_classes", "noise_classes.json")
 # The number of realizations of the dataset, i.e. copies with the same settings but different random initializations
 n_realizations = 2
 # The number of trials for each realization
 n_trials = 3
 
+assert os.path.exists(ds_json)
+assert os.path.exists(nc_json)
+with open(ds_json, 'r') as f:
+	# The name of the dataset (will be suffixed by 2, 3, etc. if there are multiple realizations)
+	DATASET_NAME = json.load(f)["name"]
+
 ds_names = [DATASET_NAME + (str(i+1) if i > 0 else "") for i in range(n_realizations)]
 
-def assert_datasets_exist():
+def dataset_definition_equivalent(ds_name):
+	required_fields = ("train", "test", "weights", "pipeline", "incompatible", "operations")
+	with open(os.path.join(root, "datasets", ds_name, "source.json"), 'r') as f:
+		realization = json.load(f)
+	with open(ds_json, 'r') as f:
+		definition = json.load(f)
+	
+	for field in required_fields:
+		if field in ("incompatible", "operations"):
+			if realization.get(field, []) != definition.get(field, []):
+				return False
+		elif realization[field] != definition[field]:
+			return False
+	return True
+
+def assert_datasets_correct():
 	for ds_name in ds_names:
 		res = json.loads(subprocess.run(
-			(os.path.join(root, "noise_classes", "interface.py"), "check", ds_name, "--silent"),
+			(os.path.join(root, "noise_classes", "interface.py"), "check", ds_name, "--silent", "--noise-classes", nc_json),
 			encoding=sys.getdefaultencoding(),
 			stdout=subprocess.PIPE,
 			check=True
 		).stdout)
 		
-		cmd = (os.path.join(root, "degradation", "create_dataset.py"), "create", ds_json, "--name", ds_name)
+		cmd = (os.path.join(root, "degradation", "create_dataset.py"), "create", ds_json, "--name", ds_name, "--noise-classes", nc_json)
 		if res[0] is None:
 			# Dataset does not exist, create it
 			subprocess.run(cmd, check=True)
-		elif res[0] is False:
+		elif res[0] is False or not dataset_definition_equivalent(ds_name):
 			# Dataset exists but is outdated, overwrite it
 			subprocess.run((*cmd, "--overwrite"), check=True)
 		else:
 			print(ds_name, "exists and is up-to-date")
 
-def train_test(ds_name=DATASET_NAME, silent=False, recompute=False):
-	kwargs = {"stdout": subprocess.DEVNULL} if silent else dict()
+def train_test(ds_name=DATASET_NAME, silent=False, recompute=False, retry=False):
+	kwargs = {"stdout": subprocess.DEVNULL} if silent else {}
 	try:
-		subprocess.run((os.path.join(root, "noise_classes", "interface.py"), "train", ds_name), check=True, **kwargs)
-	except subprocess.CalledProcessError:
-		# We may have been unlucky and ran out of VRAM so try again
-		subprocess.run((os.path.join(root, "noise_classes", "interface.py"), "train", ds_name), check=True, **kwargs)
+		subprocess.run((os.path.join(root, "noise_classes", "interface.py"), "train", ds_name, "--noise-classes", nc_json), check=True, **kwargs)
+	except subprocess.CalledProcessError as e:
+		if retry:
+			# We may have been unlucky and ran out of VRAM so try again
+			subprocess.run((os.path.join(root, "noise_classes", "interface.py"), "train", ds_name, "--noise-classes", nc_json), check=True, **kwargs)
+		else:
+			raise e
 
 	args = Namespace(
 		models=os.path.join(interface.PROJECT_ROOT, "classifier", "models"),
@@ -86,11 +112,12 @@ def merge_confusion_tables(a, b):
 	return ct
 
 if __name__ == "__main__":
-	assert_datasets_exist()
+	assert_datasets_correct()
 
 	testresults = os.path.join(root, "testresults")
 	if not os.path.exists(testresults):
 		os.mkdir(testresults)
+
 
 	with open(os.path.join(testresults, "log.txt"), "w") as f:
 		with redirect_stdout(f):
@@ -98,7 +125,7 @@ if __name__ == "__main__":
 
 			realizations_avg_cts, realizations_avg_stats = [], []
 			for ds_name in ds_names:
-				trials_avg_cts, trials_avg_stats = repeat_trial(n_trials, silent=False)
+				trials_avg_cts, trials_avg_stats = repeat_trial(n_trials, ds_name, silent=False)
 				realizations_avg_cts.append(trials_avg_cts)
 				realizations_avg_stats.append(trials_avg_stats)
 
