@@ -1,7 +1,5 @@
 # speech-signal-issues
-TODO: fix the report link
-
-Code for my degree project [_Detecting Signal Corruptions in Voice Recordings for Speech Therapy_](). Note that this is for the multi-label code, the single-label code can be found at [https://github.com/HelmerNylen/prestudy](https://github.com/HelmerNylen/prestudy).
+Code for my degree project [_Detecting Signal Corruptions in Voice Recordings for Speech Therapy_](http://www.csc.kth.se/~ann/exjobb/helmer_nylen.pdf). Note that this is for the multi-label code, the single-label code can be found at [https://github.com/HelmerNylen/prestudy](https://github.com/HelmerNylen/prestudy).
 
 To get started with the tool you do not need to read this entire document as much of the content is here for reference. **Installation** and **Running Experiments** are recommended.
 
@@ -23,6 +21,7 @@ To get started with the tool you do not need to read this entire document as muc
 	3. [Adding Features](#adding-features)
 		- [Voice Activity Detection](#voice-activity-detection)
 	4. [Adding Classifiers](#adding-classifiers)
+		- [Ensemble Classification](#ensemble-classification)
 
 ## Installation
 
@@ -371,8 +370,83 @@ Both `frame_length` and `aggressiveness` are required arguments to the VAD. Avai
 - `aggressiveness`, how likely the VAD is to consider a frame non-speech. Must be one of 0, 1, 2, or 3.
 - `inverse`, whether to return the voiced (`false`) or the unvoiced (`true`) segments. Defaults to `false`.
 - `smooth_n`, the length of the smoothing window used. If not set, smoothing is not used at all. Smoothing computes a running average of the VAD verdict of the `smooth_n` nearest frames. This ensures that a single mislabeled frame does not affect the segmentation.
-- `smooth_threshold`, the threshold that must be reached by the running average to toggle between the voiced/unvoiced state. For example, if `smooth_threshold = 0.8` then 80% of the frames must be labeled voiced for a voiced segment to start, and then 80% of frames must be labeled unvoiced to end the segment. Defaults to `0.5`.
+- `smooth_threshold`, the threshold that must be reached by the running average to toggle between the voiced/unvoiced state. For example, if `smooth_threshold = 0.8` then 80% of the frames must be labeled voiced for a voiced segment to start, after which 80% of frames must be labeled unvoiced to end the segment. Defaults to `0.5`.
 - `min_length`, the minimum length of a segment in milliseconds. Segments that are shorter than this are discarded. Defaults to `0`, which will include all segments.
 
 ### Adding Classifiers
 
+Assume that we want to see how a new classification algorithm fares against the others in the test. We choose the Decision Tree (DT) algorithm which conveniently is implemented in scikit-learn, a module we are already using. To interface with the feature extraction and other parts of the tool all algorithms must inherit from [`classifier/model.py`](classifier/model.py). We start by creating a new file, `model_dt.py` in the [_classifier_](classifier) folder with the following content:
+```python
+from sklearn.tree import DecisionTreeClassifier
+import numpy as np
+
+from .model import Model
+
+class DT(Model):
+	MULTICLASS = True
+	def __init__(self, config: dict, noise_types: list):
+		self.dtc = DecisionTreeClassifier(**config["parameters"])
+		self.noise_types = noise_types
+	
+	def get_noise_types(self):
+		return self.noise_types
+	
+	def train(self, train_data, index, labels, config: dict=None):
+		# Ensure all samples are single vectors (disallow sequences of vectors)
+		assert all(sequence.shape[0] == 1 for sequence in train_data)
+
+		X = np.concatenate(train_data)
+		self.dtc.fit(X, labels)
+	
+	def score(self, test_data, index):
+		# Ensure all samples are single vectors (disallow sequences of vectors)
+		assert all(sequence.shape[0] == 1 for sequence in test_data)
+		# Ensure the VAD is not used
+		assert all(np.arange(len(index)) == index)
+
+		X = np.concatenate(test_data)
+		return self.dtc.predict(X)
+```
+
+For brevity we take some shortcuts in this classifier by disallowing sequences of vectors (such as MFCC features) and VAD splitting.
+
+To make the classifier usable we need to add it to [`noise_classes/interface.py`](noise_classes/interface.py), where the names are resolved. In the beginning of the file there are a number of rows where the other classifiers are imported. Add a line importing the DT classifier and add it to `available_models` like so:
+```python
+from classifier.model_lstm import LSTM
+from classifier.model_gmmhmm import GMMHMM
+from classifier.model_gmm import GMM
+from classifier.model_dt import DT
+available_models = (LSTM, GMMHMM, GMM, DT)
+```
+Before we can use it, however, we also need to add an entry specifying the (default) arguments to the classifier.
+
+According to the [scikit-learn documentation](https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html#sklearn.tree.DecisionTreeClassifier) the `DecisionTreeClassifier` takes a number of possible keyword arguments, such as `criterion` or `max_depth`. We can provide our own defaults to these by adding them to [`classifier/defaults.json`](classifier/defaults.json), by adding the following before the last curly brace:
+```json
+...
+	,
+	"DT": {
+		"parameters": {
+			"criterion": "gini",
+			"max_depth": 10
+		},
+		"train": {}
+	}
+...
+```
+
+Next, open [`noise_classes/noise_classes.json`](noise_classes/noise_classes.json) and change the classifier type of DC offset from `GMM` to `DT`. Also change the feature type back to `histogram` if you modified it in the last step. If you did not implement the DC offset corruption you can use one of the clipping corruptions instead. A decision tree will now be used to detect the corruption. Note that the classifier specification also contains `"parameters"` and `"train"`, just like `defaults.json`. Setting these to `"default"` will copy the settings from `defaults.json`, but if we want to override a setting specifically for a certain corruption it can be done here. In that case we need to specify all the fields in the category we are replacing, for example setting
+```json
+"parameters": {
+	"criterion": "entropy"
+}
+```
+in `noise_classes.json` would change the `criterion` argument to `"entropy"`, but also unset the `max_depth` argument.
+
+Now, having implemented `DT`, added it to `defaults.json` and `interface.py`, and specified it as the classifier for the DC offset, we are all set to test it out. Try running `experiments.py` and see if the DT classifier performs as well as the GMM. For reference, I get a 99.7% balanced accuracy on DC offset.
+
+The arguments `train_data` and `test_data` are the vector sequences returned by the feature extraction methods. Recall that they consist of numpy arrays of shape `(T, dims)`, where `dims` is the same for all arrays. If the VAD is used there are in general multiple arrays per sample, corresponding to the different voiced or unvoiced segments in the recording. The `index` variable can be used to keep track of these: array `test_data[i]` belongs to file number `index[i]`. During labeling most existing classifiers score segments separately and then compute the weighted mean of the scores, which is used as the score for that recording. (Note that `score()` should return one score per recording, not per segment, so `test_data` is generally longer than the returned score array when VAD filtering is used.)
+
+#### Ensemble Classification
+The keen reader will have noticed that the `"classifiers"` field in a noise class is actually an array of objects. This is because you can specify multiple classifiers for the corruption which will vote on the final label. Simply add another classifier specification to the list - these do not have to use the same algorithm or even features. You can specify the weights of individual classifiers by adding a `"weight"` field (the default is `1`), or indicate that the classifier should train on a bootstrapped sample by adding `"bootstrap": true`. If you have multiple classifiers of the same type and want to average the score rather than the label during voting, you can add a field to the noise class specifying `"classification_settings": {"average": "score"}`.
+
+Note that since training is done separately for each classifier, the training time will increase considerably when ensemble classification is used.
