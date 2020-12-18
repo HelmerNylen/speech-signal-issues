@@ -1,11 +1,6 @@
 [{
 	"id": "add-white",
 	"name": "White Noise",
-	"info": {
-		"description": "A description of the problem.",
-		"cause": "An explanation of what causes the problem.",
-		"solution": "How to solve the problem."
-	},
 	"degradations": [
 		{
 			"name": "addNoise",
@@ -20,24 +15,12 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "mfcc_kaldi",
-			"feature_settings": {},
-			"vad": {
-				"frame_length": 20,
-				"aggressiveness": 2,
-				"inverse": true,
-				"min_length": 100,
-				"smooth_n": 5
-			}
+			"feature_settings": {}
 		}
 	]
 }, {
 	"id": "add-aircon",
 	"name": "Air-conditioning",
-	"info": {
-		"description": "A description of the problem.",
-		"cause": "An explanation of what causes the problem.",
-		"solution": "How to solve the problem."
-	},
 	"degradations": [
 		{
 			"name": "addSound",
@@ -53,24 +36,12 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "mfcc_kaldi",
-			"feature_settings": {},
-			"vad": {
-				"frame_length": 20,
-				"aggressiveness": 2,
-				"inverse": true,
-				"min_length": 100,
-				"smooth_n": 5
-			}
+			"feature_settings": {}
 		}
 	]
 }, {
 	"id": "add-hum",
 	"name": "Electric Hum",
-	"info": {
-		"description": "A description of the problem.",
-		"cause": "An explanation of what causes the problem.",
-		"solution": "How to solve the problem."
-	},
 	"degradations": [
 		{
 			"name": "addSound",
@@ -86,24 +57,12 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "mfcc_kaldi",
-			"feature_settings": {},
-			"vad": {
-				"frame_length": 20,
-				"aggressiveness": 2,
-				"inverse": true,
-				"min_length": 100,
-				"smooth_n": 5
-			}
+			"feature_settings": {}
 		}
 	]
 }, {
 	"id": "clipping-hard",
 	"name": "Clipping (Hard)",
-	"info": {
-		"description": "A description of the problem.",
-		"cause": "An explanation of what causes the problem.",
-		"solution": "How to solve the problem."
-	},
 	"degradations": [
 		{
 			"name": "applyClippingAlternative",
@@ -115,21 +74,16 @@
 	],
 	"classifiers": [
 		{
-			"type": "LSTM",
+			"type": "GMM",
 			"parameters": "default",
 			"train": "default",
-			"feature": "mfcc_kaldi",
+			"feature": "histogram",
 			"feature_settings": {}
 		}
 	]
 }, {
 	"id": "clipping-soft",
 	"name": "Clipping (Soft)",
-	"info": {
-		"description": "A description of the problem.",
-		"cause": "An explanation of what causes the problem.",
-		"solution": "How to solve the problem."
-	},
 	"degradations": [
 		{
 			"name": "applySoftClipping",
@@ -141,21 +95,16 @@
 	],
 	"classifiers": [
 		{
-			"type": "LSTM",
+			"type": "GMM",
 			"parameters": "default",
 			"train": "default",
-			"feature": "mfcc_kaldi",
+			"feature": "histogram",
 			"feature_settings": {}
 		}
 	]
 }, {
 	"id": "mute",
 	"name": "Random Muting",
-	"info": {
-		"description": "A description of the problem.",
-		"cause": "An explanation of what causes the problem.",
-		"solution": "How to solve the problem."
-	},
 	"degradations": [
 		{
 			"name": "applyMute",
@@ -179,11 +128,6 @@
 }, {
 	"id": "add-infra",
 	"name": "Infrasound Noise",
-	"info": {
-		"description": "A description of the problem.",
-		"cause": "An explanation of what causes the problem.",
-		"solution": "How to solve the problem."
-	},
 	"degradations": [
 		{
 			"name": "addInfrasound",
