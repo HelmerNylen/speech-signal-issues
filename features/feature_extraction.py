@@ -2,14 +2,18 @@ import os
 import csv
 import numpy as np
 from .mfcc import mfcc_kaldi, mfcc_librosa
-from .custom import acf, histogram, rms_energy, rms_energy_infra, mfcc_kaldi_full, histogram_local, mfcc_kaldi_delta
+from .custom import acf, histogram, rms_energy, \
+	rms_energy_infra, mfcc_kaldi_full, histogram_local, \
+	mfcc_kaldi_delta
 from .utils import root_folder, concat_samples
 
+FEATURES = (mfcc_kaldi, mfcc_librosa, acf, histogram,
+	rms_energy, rms_energy_infra, mfcc_kaldi_full,
+	histogram_local, mfcc_kaldi_delta)
 CACHE_SIZE = 20
 
 def get_available_features() -> tuple:
-	feats = (mfcc_kaldi, mfcc_librosa, acf, histogram, rms_energy, rms_energy_infra, mfcc_kaldi_full, histogram_local, mfcc_kaldi_delta)
-	return tuple(f.__name__ for f in feats), feats
+	return tuple(f.__name__ for f in FEATURES), FEATURES
 
 def read_dataset(name: str, partition: str, label: str=None) -> tuple:
 	if partition.lower() not in ("train", "test"):

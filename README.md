@@ -20,8 +20,9 @@ To get started with the tool you do not need to read this entire document as muc
 4. [**Running Experiments**](#running-experiments)
 	1. [Generating Datasets](#generating-datasets)
 	2. [Adding Corruptions](#adding-corruptions)
-	3. [Adding Classifiers](#adding-classifiers)
-	4. [Adding Features](#adding-features)
+	3. [Adding Features](#adding-features)
+		- [Voice Activity Detection](#voice-activity-detection)
+	4. [Adding Classifiers](#adding-classifiers)
 
 ## Installation
 
@@ -34,7 +35,7 @@ To get started with the tool you do not need to read this entire document as muc
 7. Acquire TIMIT and place the root directory (containing `DOC`, `TEST`, `TRAIN` and `README.DOC`) in the folder [_timit_](timit).
 8. Install [Kaldi](https://github.com/kaldi-asr/kaldi).
 9. Decide if you need the GenHMM:
-	- If you want to use the GenHMM, clone the [gm\_hmm repository](https://github.com/FirstHandScientist/genhmm) and place its root directory in the folder _classifier/gm\_hmm_. Follow its installation instructions. The dataset preparation steps etc. are not needed but can be useful for verifying the installation.
+	- If you want to use the GenHMM, clone or download the [gm\_hmm repository](https://github.com/FirstHandScientist/genhmm) and place its root directory in the folder _classifier/gm\_hmm_. Follow its installation instructions. The dataset preparation steps etc. are not needed but can be useful for verifying the installation.
 	- If you are not interested in using the GenHMM, proceed to the next step. It can be installed at a later time if you change your mind.
 10. Open a terminal in this project's root folder (where _README.md_ is located). Create a virtual environment with a Python 3.6 interpreter via `python3.6 -m venv pyenv`.
 11. Activate the environment via `source pyenv/bin/activate`.
@@ -102,7 +103,7 @@ The _features_ folder contains tools to extract, filter, and cache various types
 
 The [_cache_](degradation/cache) folder stores computed features so that they can be reused without having to recompute them. The size of the cache can be adjusted in `feature_extraction.py`.
 
-[_kaldi_](degradation/kaldi) contains the Kaldi library, used for MFCC extraction.
+_kaldi_ contains the Kaldi library, used for MFCC extraction.
 
 ### [_noise_](noise)
 _noise_ is where the audio files for additive noise are stored. The name of each subfolder serves as an identifier, and during dataset generation each subfolder is partitioned into a training and a testing set. This does not, however, affect the contents in the _noise_ subfolders on disk.
@@ -189,7 +190,7 @@ function [f_audio_out,timepositions_afterDegr] = degradationUnit_addDCOffset(f_a
 % Programmer: Your Name
 %
 % Description:
-% - a description
+% - adds a DC bias to the audio
 %
 % Input:
 %   f_audio      - audio signal \in [-1,1]^{NxC} with C being the number of
@@ -258,7 +259,11 @@ end
 
 As we have named our file with the prefix `degradationUnit_` and put it in the _custom-degradations_ folder, `create_dataset.m` will automatically find our Matlab function for us. However, we also need to make sure the Python script knows our degradation exists. To do this we open [`degradation/degradations.py`](degradation/degradations.py) and add `"addDCOffset"` to the `DEGRADATIONS` constant. It should now read:
 ```python
-DEGRADATIONS = ("", "pad", "addSound", "applyImpulseResponse", "adaptiveEqualizer", "applyMfccMeanAdaption", "normalize", "applyMute", "applySoftClipping", "addNoise", "applyAliasing", "applyClipping", "applyClippingAlternative", "applyDelay", "applyDynamicRangeCompression", "applyHarmonicDistortion", "applyHighpassFilter", "applyLowpassFilter", "applySpeedup", "applyWowResampling", "addInfrasound", "addDCOffset")
+DEGRADATIONS = (
+	"", "pad", "addSound", "applyImpulseResponse", "adaptiveEqualizer", "applyMfccMeanAdaption",
+	"normalize", "applyMute", "applySoftClipping", "addNoise", "applyAliasing", "applyClipping",
+	"applyClippingAlternative", "applyDelay", "applyDynamicRangeCompression", "applyHarmonicDistortion",
+	"applyHighpassFilter", "applyLowpassFilter", "applySpeedup", "applyWowResampling", "addInfrasound", "addDCOffset")
 ```
 
 Next, we have to add our new corruption to [`noise_classes/noise_classes.json`](noise_classes/noise_classes.json). To introduce some variety we set the `bias` argument to a random value between `0.02` and `0.07`. As the offset is likely more detectable in the time domain than the frequency domain we use a histogram feaure and a GMM classifier for now. Add the following to the end of the list, right before the final `]` symbol:
@@ -320,7 +325,54 @@ To summarize, the steps are as follows:
 3. Create a new noise class in [`noise_classes/noise_classes.json`](noise_classes/noise_classes.json).
 4. Add the noise class identifier to a dataset's `weights` and `pipeline`.
 
+### Adding Features
+In the previous section we used a histogram feature to detect the DC offset corruption. While this certainly may be a good starting point, a more straightforward approach would be to use the mean of the signal as a feature. We thus need to implement it and add it to the appropriate files.
+
+Open [`features/custom.py`](features/custom.py). Every feature function receives the list of files from which features will be extracted as the first argument. Settings for the computation can be provided via keyword arguments, which will be filled in by the fields in the noise class' `"feature_settings"` object. For instance, we can specify the number of bins in the histogram feature by writing e.g.
+```python
+"feature_settings": {"n_bins": 10}
+```
+In our current case, with the mean feature, there is not really any more information we need to compute the feature, so we accept no keyword arguments. At the bottom of `custom.py` we add the following method definition:
+```python
+def mean(filenames):
+	import librosa
+	
+	res = []
+	for fn in filenames:
+		y, _ = librosa.load(fn, None)
+		value = np.mean(y).reshape(-1, 1)
+		res.append(value)
+	
+	return res
+```
+We use the `librosa` module to read each sample, and `numpy` to compute the mean. The return value of a feature function must be a list of `numpy` arrays, one for each file. The arrays should have the shape `(T, dims)`, where `T` is the length of the time sequence and `dims` number of feature dimensions. `dims` should be the same for each array, but `T` may vary. In our case we are only computing a scalar, so we convert it into a 1x1 array. (The arrays also need to be of the `float32` type. While this is the default in many cases, certain `librosa` spectrum computations return `float64`.)
+
+The next step is to let [`features/feature_extraction.py`](features/feature_extraction.py) know of our new method. At the start we add `mean` to the import statement from `.custom`:
+```python
+from .custom import acf, histogram, rms_energy, \
+	rms_energy_infra, mfcc_kaldi_full, histogram_local, \
+	mfcc_kaldi_delta, mean
+```
+We also add it to the `FEATURES` constant:
+```python
+FEATURES = (mfcc_kaldi, mfcc_librosa, acf, histogram,
+	rms_energy, rms_energy_infra, mfcc_kaldi_full,
+	histogram_local, mfcc_kaldi_delta, mean)
+```
+While we are editing this file it is worth to note the `CACHE_SIZE` constant defined on the row below `FEATURES`. Extracting features can take a long time, and if we are training multiple classifiers on the same datasets and using the same features it would be redundant to keep recomputing them. Instead we save a number of computed features to the _cache_ folder (at most `CACHE_SIZE`, after which the oldest ones are removed). While this is practical during experiments it is less so if you are debugging a feature method, in which case it is suggested to set `CACHE_SIZE` to `0` or to clear it manually by deleting the files after each run.
+
+Now, the only thing to do is to swap out the histogram and replace it with the mean. In [`noise_classes/noise_classes.json`](noise_classes/noise_classes.json), replace `"feature": "histogram"` with `"feature": "mean"` in the DC offset noise class. If you re-run the experiment you should see that `experiment.py` does not need to regenerate the dataset, and that the GMM classifier for `dc-offset` now uses `mean` features. When testing this the balanced accuracy increases to 99.97% for me, but as there are elements of randomness the results may vary slightly.
+
+#### Voice Activity Detection
+For corruptions that only arise during speech it may be interesting to filter out silent segments, and for those that are related to background noise it may be beneficial to remove segments where the speech is dominant. To this end there is a way to split the recordings using a Voice Activity Detector (VAD). By adding a `"vad"` field to an object in the `"classifiers"` array of a noise class you indicate that a VAD will be used, and can specify settings which are passed to [`features/vad.py`](features/vad.py).
+
+Both `frame_length` and `aggressiveness` are required arguments to the VAD. Available settings are:
+- `frame_length`, the length of the VAD analysis frame in milliseconds. It must be one of 10, 20, or 30.
+- `aggressiveness`, how likely the VAD is to consider a frame non-speech. Must be one of 0, 1, 2, or 3.
+- `inverse`, whether to return the voiced (`false`) or the unvoiced (`true`) segments. Defaults to `false`.
+- `smooth_n`, the length of the smoothing window used. If not set, smoothing is not used at all. Smoothing computes a running average of the VAD verdict of the `smooth_n` nearest frames. This ensures that a single mislabeled frame does not affect the segmentation.
+- `smooth_threshold`, the threshold that must be reached by the running average to toggle between the voiced/unvoiced state. For example, if `smooth_threshold = 0.8` then 80% of the frames must be labeled voiced for a voiced segment to start, and then 80% of frames must be labeled unvoiced to end the segment. Defaults to `0.5`.
+- `min_length`, the minimum length of a segment in milliseconds. Segments that are shorter than this are discarded. Defaults to `0`, which will include all segments.
+
 ### Adding Classifiers
 
-
-### Adding Features
