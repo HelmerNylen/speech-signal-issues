@@ -1,7 +1,7 @@
-# speech-signal-issues
+# Detecting Signal Corruptions in Voice Recordings for Speech Therapy
 Code for my degree project [_Detecting Signal Corruptions in Voice Recordings for Speech Therapy_](http://www.csc.kth.se/~ann/exjobb/helmer_nylen.pdf). Note that this is for the multi-label code, the single-label code can be found at [https://github.com/HelmerNylen/prestudy](https://github.com/HelmerNylen/prestudy).
 
-To get started with the tool you do not need to read this entire document as much of the content is here for reference. **Installation** and **Running Experiments** are recommended.
+To get started with the tool you do not need to read this entire document as much of the content is here for reference. [**Installation**](#installation) and the first section of [**Running Experiments**](#running-experiments) are recommended.
 
 ## Table of contents
 1. [**Installation**](#installation)
@@ -24,7 +24,7 @@ To get started with the tool you do not need to read this entire document as muc
 		- [Ensemble Classification](#ensemble-classification)
 
 ## Installation
-
+Ubuntu 18.04.5 was used during development.
 1. Clone or download this repository.
 2. Install [Python 3.6](https://www.python.org/downloads/). Version 3.6.9 was used during development.
 3. Install [NVidia CUDA](https://docs.nvidia.com/cuda/cuda-installation-guide-linux/index.html).
@@ -75,7 +75,7 @@ This is the suggested and default folder to store all datasets. Assuming you gen
 Finally, the dataset definition is copied to _datasets/MyDataset/source.json_. More on how these work below.
 
 ### [_degradation_](degradation)
-This contains the scripts needed to generate datasets. These are accessed via the [`create_dataset.py`](degradation/create_dataset.py) tool, the usage of which is explained under section **Generating Datasets**.
+This contains the scripts needed to generate datasets. These are accessed via the [`create_dataset.py`](degradation/create_dataset.py) tool, the usage of which is explained under section [**Generating Datasets**](#generating-datasets).
 
 [`balanced_dataset.json`](degradation/balanced_dataset.json) and [`basic_dataset.json`](degradation/basic_dataset.json) contain the definitions of the _Balanced_ and _Realistic_ datasets, respectively, used in the report. These are just examples and can be replaced with your own definition or removed.
 
@@ -83,7 +83,7 @@ This contains the scripts needed to generate datasets. These are accessed via th
 
 [`degradations.py`](degradation/degradations.py) contains a list of all valid degradations. It helps convert the JSON definition of a dataset into proper arguments for `create_samples.m`.
 
-[`preparations.py`](degradation/preparations.py) is an interface to SoX, which helps covert the audio files (TIMIT and noise files) to valid 16-bit 16 kHz mono wavefiles.
+[`preparations.py`](degradation/preparations.py) is an interface to SoX, which helps convert the audio files (TIMIT and noise files) to valid 16-bit 16 kHz mono wavefiles.
 
 The [_adt_](degradation/adt) folder contains the Audio Degradation Toolbox, which is a Matlab tool with scripts for common degradations.
 
@@ -116,7 +116,7 @@ This folder contains the main tools for working with classifier and feature comb
 
 [`interface.py`](noise_classes/interface.py) is used for working with `NoiseClass` instances. It can be used to train and test classifiers on specific datasets, perform classification of external files using trained classifiers, and to check whether the `noise_classes.json` file, the trained classifiers in _classifier/models_, and the dataset definition in `datasets/MyDataset/source.json` are in sync, taking into account `classifier/defaults.json`.
 
-[`noise_classes.json`](noise_classes/noise_classes.json) is where most of the editing goes when performing different experiments. It contains an array of corruption specifications, which in turn consist of an identifier, a readable name, the degradations needed to create it, and the classifier(s) and features that should be used to detect it. The identifiers in this file are used in the dataset definitions.
+[`noise_classes.json`](noise_classes/noise_classes.json) is where most of the editing goes when performing different experiments. It contains an array of corruption specifications, which in turn consist of an identifier, a readable name, the degradations needed to create it, and the classifier(s) and features that should be used to detect it. The identifiers in this file are used in the dataset definitions. See [**Adding Corruptions**](#adding-corruptions) for more details.
 
 ### [_timit_](timit)
 The _timit_ folder contains the uncorrupted speech samples used to make the datasets. All sound files encountered in this folder (searching all subfolders recursively) are converted to conforming `.wav` files during the data preparation step. The separation into test and training set in TIMIT is ignored when new datasets are created. If you want to add other speech files to the datasets you can place them here, but note that the new files should also be free from any corruptions.
@@ -133,27 +133,27 @@ n_realizations = 2
 # The number of trials for each realization
 n_trials = 3
 ```
-For example, if you want to average the results over more repeated trials you can increase `n_trials`, or to work with a different dataset you specify its definition in `ds_json`.
+For example, if you want to average the results over more repeated trials you can increase `n_trials`, or if you want to work with a different dataset you can specify its definition in `ds_json`.
 
 The script will automatically check for changes to the dataset parameters and definitions of the noise classes (corruptions) and regenerate the datasets if they are outdated. The results will be written to the console and `testresults/Test [current time]`. Additional output may be written to `testresults/log.txt`.
 
 ### Generating Datasets
 Datasets are defined through both a dataset definition file and a noise classes specification. A [dataset definition](degradation/basic_dataset.json) file contains an object with the following fields:
 
-- `"name"`, the name of the dataset. This is used as the folder name containing the dataset and filename of trained `.noiseclasses` files in _classifier/models_. 
+- `"name"`, the name of the dataset. This is used as the name of the folder that contains the dataset and the filename of trained `.noiseclasses` files in _classifier/models_.
 - `"train"`, the number of files in the training set. If less than 1 it is used as a fraction.
 - `"test"`, the equivalent for the testing set.
 - `"weights"`, a mapping of noise class identifiers to fractions. Describes the ratio of files which are given the corruption.
-- `"pipeline"`, a list of noise class or operation (see below) identifiers which describes the order in which degradations are applied. All identifiers in the `weights` mapping must occur in the `pipeline` list.
+- `"pipeline"`, a list of noise class or operation (see below) identifiers. The list describes the order in which degradations are applied. All identifiers in the `weights` mapping must occur in the `pipeline` list.
 
 Additionally, two additional fields may be present:
 - `"operations"`, a list of objects similar to noise classes. An operation has an identifier (`"name"`) and a list of degradations. If an operation is present in `pipeline` it is applied to all samples at that point unless the sample has been assigned incompatible labels.
 - `"incompatible"`, a list of noise class and operation identifier combinations. These are resolved as follows:
 	1. Labels are randomly assigned to samples according to `weights`.
-	2. The samples which are assigned all the noise class identifiers present in a combination have those labels replaced with only one of them. The choice of what label remains is proportional to each label's weight.
+	2. The samples which are assigned all the noise class identifiers present in a combination have those labels replaced with only one of them. The probability of a label being chosen to remain is proportional to the label's weight.
 	3. If there is an operation identifier present in the combination, that operation is omitted for all samples in step 2.
 
-	A combination must have at least two identifiers, and may contain at most one operation identifier.
+	A combination must have at least two identifiers, of which at most one may be an operation identifier.
 
 The degradations in each noise class is not defined in the dataset definition but in a [noise classes specification](noise_classes/noise_classes.json). (In retrospect this may have been a poor design choice, but here we are.) This is a file containing a list of noise class objects. The parts relevant for dataset generation are the `"id"` and `"degradations"` fields.
 
@@ -262,7 +262,8 @@ DEGRADATIONS = (
 	"", "pad", "addSound", "applyImpulseResponse", "adaptiveEqualizer", "applyMfccMeanAdaption",
 	"normalize", "applyMute", "applySoftClipping", "addNoise", "applyAliasing", "applyClipping",
 	"applyClippingAlternative", "applyDelay", "applyDynamicRangeCompression", "applyHarmonicDistortion",
-	"applyHighpassFilter", "applyLowpassFilter", "applySpeedup", "applyWowResampling", "addInfrasound", "addDCOffset")
+	"applyHighpassFilter", "applyLowpassFilter", "applySpeedup", "applyWowResampling", "addInfrasound", "addDCOffset"
+)
 ```
 
 Next, we have to add our new corruption to [`noise_classes/noise_classes.json`](noise_classes/noise_classes.json). To introduce some variety we set the `bias` argument to a random value between `0.02` and `0.07`. As the offset is likely more detectable in the time domain than the frequency domain we use a histogram feaure and a GMM classifier for now. Add the following to the end of the list, right before the final `]` symbol:
@@ -420,7 +421,7 @@ available_models = (LSTM, GMMHMM, GMM, DT)
 ```
 Before we can use it, however, we also need to add an entry specifying the (default) arguments to the classifier.
 
-According to the [scikit-learn documentation](https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html#sklearn.tree.DecisionTreeClassifier) the `DecisionTreeClassifier` takes a number of possible keyword arguments, such as `criterion` or `max_depth`. We can provide our own defaults to these by adding them to [`classifier/defaults.json`](classifier/defaults.json), by adding the following before the last curly brace:
+According to the [scikit-learn documentation](https://scikit-learn.org/stable/modules/generated/sklearn.tree.DecisionTreeClassifier.html#sklearn.tree.DecisionTreeClassifier) the `DecisionTreeClassifier` takes a number of possible keyword arguments, such as `criterion` or `max_depth`. We can provide our own defaults to these by adding them to [`classifier/defaults.json`](classifier/defaults.json), which is done by adding the following before the last curly brace:
 ```json
 ...
 	,
@@ -434,7 +435,9 @@ According to the [scikit-learn documentation](https://scikit-learn.org/stable/mo
 ...
 ```
 
-Next, open [`noise_classes/noise_classes.json`](noise_classes/noise_classes.json) and change the classifier type of DC offset from `GMM` to `DT`. Also change the feature type back to `histogram` if you modified it in the last step. If you did not implement the DC offset corruption you can use one of the clipping corruptions instead. A decision tree will now be used to detect the corruption. Note that the classifier specification also contains `"parameters"` and `"train"`, just like `defaults.json`. Setting these to `"default"` will copy the settings from `defaults.json`, but if we want to override a setting specifically for a certain corruption it can be done here. In that case we need to specify all the fields in the category we are replacing, for example setting
+Next, open [`noise_classes/noise_classes.json`](noise_classes/noise_classes.json) and change the classifier type of DC offset from `GMM` to `DT`. Also change the feature type back to `histogram` if you modified it in the last step. If you did not implement the DC offset corruption you can use one of the clipping corruptions instead.
+
+A decision tree will now be used to detect the corruption. Note that the classifier specification also contains `"parameters"` and `"train"`, just like `defaults.json`. Setting these to `"default"` will copy the settings from `defaults.json`, but if we want to override a setting specifically for a certain corruption it can be done here. In that case we need to specify all the fields in the category we are replacing, for example setting
 ```json
 "parameters": {
 	"criterion": "entropy"
@@ -444,7 +447,7 @@ in `noise_classes.json` would change the `criterion` argument to `"entropy"`, bu
 
 Now, having implemented `DT`, added it to `defaults.json` and `interface.py`, and specified it as the classifier for the DC offset, we are all set to test it out. Try running `experiments.py` and see if the DT classifier performs as well as the GMM. For reference, I get a 99.7% balanced accuracy on DC offset.
 
-The arguments `train_data` and `test_data` are the vector sequences returned by the feature extraction methods. Recall that they consist of numpy arrays of shape `(T, dims)`, where `dims` is the same for all arrays. If the VAD is used there are in general multiple arrays per sample, corresponding to the different voiced or unvoiced segments in the recording. The `index` variable can be used to keep track of these: array `test_data[i]` belongs to file number `index[i]`. During labeling most existing classifiers score segments separately and then compute the weighted mean of the scores, which is used as the score for that recording. (Note that `score()` should return one score per recording, not per segment, so `test_data` is generally longer than the returned score array when VAD filtering is used.)
+The arguments `train_data` and `test_data` in the `test()` and `score()` methods of `model_dt.py` are the vector sequences returned by the feature extraction methods. Recall that they consist of numpy arrays of shape `(T, dims)`, where `dims` is the same for all arrays. If the VAD is used there are in general multiple arrays per sample, corresponding to the different voiced or unvoiced segments in the recording. The `index` variable can be used to keep track of these: array `test_data[i]` belongs to file number `index[i]`. During labeling most existing classifiers score segments separately and then compute the weighted mean of the scores, which is used as the score for that recording. (Note that `score()` should return one score per recording, not per segment, so `test_data` is generally longer than the returned score array when VAD filtering is used.)
 
 #### Ensemble Classification
 The keen reader will have noticed that the `"classifiers"` field in a noise class is actually an array of objects. This is because you can specify multiple classifiers for the corruption which will vote on the final label. Simply add another classifier specification to the list - these do not have to use the same algorithm or even features. You can specify the weights of individual classifiers by adding a `"weight"` field (the default is `1`), or indicate that the classifier should train on a bootstrapped sample by adding `"bootstrap": true`. If you have multiple classifiers of the same type and want to average the score rather than the label during voting, you can add a field to the noise class specifying `"classification_settings": {"average": "score"}`.

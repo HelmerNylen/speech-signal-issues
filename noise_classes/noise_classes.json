@@ -78,7 +78,9 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "histogram",
-			"feature_settings": {}
+			"feature_settings": {
+				"relative_bins": true
+			}
 		}
 	]
 }, {
@@ -99,7 +101,9 @@
 			"parameters": "default",
 			"train": "default",
 			"feature": "histogram",
-			"feature_settings": {}
+			"feature_settings": {
+				"relative_bins": true
+			}
 		}
 	]
 }, {
