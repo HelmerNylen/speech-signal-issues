@@ -1,5 +1,5 @@
 # Detecting Signal Corruptions in Voice Recordings for Speech Therapy
-Code for my degree project [_Detecting Signal Corruptions in Voice Recordings for Speech Therapy_](http://www.csc.kth.se/~ann/exjobb/helmer_nylen.pdf). Note that this is for the multi-label code, the single-label code can be found at [https://github.com/HelmerNylen/prestudy](https://github.com/HelmerNylen/prestudy).
+Code for my degree project [_Detecting Signal Corruptions in Voice Recordings for Speech Therapy_](http://urn.kb.se/resolve?urn=urn:nbn:se:kth:diva-291429). Note that this is for the multi-label code, the single-label code can be found at [https://github.com/HelmerNylen/prestudy](https://github.com/HelmerNylen/prestudy).
 
 To get started with the tool you do not need to read this entire document as much of the content is here for reference. [**Installation**](#installation) and the first section of [**Running Experiments**](#running-experiments) are recommended.
 
