@@ -9,7 +9,7 @@
 wheel==0.30.0
 llvmlite==0.32.1
 numba==0.48
-numpy==1.18.3
+numpy==1.22.0
 hmmlearn==0.2.3
 librosa==0.7.2
 torch==1.1.0
